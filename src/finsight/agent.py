@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import anthropic
 
-from finsight.config import MODEL
+from finsight.config import MODEL, PRICING
 from finsight.llm import SYSTEM_PROMPT
 from finsight.notes import NOTE_INSTRUCTIONS, ResearchNote
 from finsight.tools import TOOLS, run_tool
@@ -46,6 +46,18 @@ class Usage:
     output_tokens: int = 0
     cache_read_tokens: int = 0  # input tokens served from the prompt cache (~10% of the price)
     cache_write_tokens: int = 0
+
+    def cost_usd(self, model: str = MODEL) -> float | None:
+        """Estimated cost in dollars, or None if we don't know the model's price."""
+        if model not in PRICING:
+            return None
+        price = PRICING[model]
+        return (
+            self.input_tokens * price["input"]
+            + self.cache_write_tokens * price["input"] * 1.25
+            + self.cache_read_tokens * price["input"] * 0.10
+            + self.output_tokens * price["output"]
+        ) / 1_000_000
 
     def add(self, api_usage) -> None:
         self.input_tokens += api_usage.input_tokens

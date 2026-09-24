@@ -1,0 +1,16 @@
+# Streamlit settings for local development (read when running from the repo root).
+
+[server]
+# Only this computer can open the app. Without this, anyone on your Wi-Fi network
+# could use it - and spend your API credits.
+address = "localhost"
+port = 8501
+# Don't auto-open a browser (that also skips Streamlit's first-run email prompt);
+# open the printed link instead.
+headless = true
+
+[browser]
+gatherUsageStats = false  # don't send usage telemetry to Streamlit
+
+[theme]
+primaryColor = "#2a78d6"
