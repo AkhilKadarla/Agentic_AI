@@ -5,14 +5,17 @@ and allows at most 10 requests per second.
 """
 
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
-CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik:010d}/us-gaap/{concept}.json"
+# All of a company's reported XBRL figures in one file (~250-550 KB compressed).
+# (The per-concept endpoint is not reliable: it returned no rows for Visa's net income.)
+FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
+STALE_AFTER = timedelta(days=548)  # ~18 months: an annual figure older than this is suspect
 
 # Companies tag the same number with different XBRL "concepts" (e.g. Apple reports revenue as
 # RevenueFromContract..., NVIDIA as Revenues), so each metric lists the candidates to try.
@@ -24,7 +27,8 @@ METRICS = {
     ],
     "gross_profit": ["GrossProfit"],
     "operating_income": ["OperatingIncomeLoss"],
-    "net_income": ["NetIncomeLoss"],
+    # ProfitLoss includes minority (noncontrolling) interests; e.g. Mastercard uses it.
+    "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "eps_diluted": ["EarningsPerShareDiluted"],
     "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
     "capital_expenditures": [
@@ -43,6 +47,8 @@ METRICS = {
 
 # The ticker list is ~1 MB and rarely changes: download it once per run, not per tool call.
 _tickers_cache: dict = {}
+# Company facts by CIK, so several metrics for one company cost one download.
+_facts_cache: dict[int, dict] = {}
 
 
 class CompanyNotFoundError(ValueError):
@@ -107,14 +113,13 @@ def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: i
     if metric not in METRICS:
         raise ValueError(f"Unknown metric '{metric}'. Choose from: {', '.join(METRICS)}")
     company = lookup_company(ticker, http)
+    us_gaap = _company_facts(company["cik"], http).get("us-gaap", {})
 
     best: dict | None = None
     for concept in METRICS[metric]:
-        response = http.get(CONCEPT_URL.format(cik=company["cik"], concept=concept))
-        if response.status_code == 404:  # this company doesn't use this concept
+        if concept not in us_gaap:  # this company doesn't use this concept
             continue
-        response.raise_for_status()
-        unit, rows = next(iter(response.json()["units"].items()))
+        unit, rows = next(iter(us_gaap[concept]["units"].items()))
         values = _annual_values(rows)
         # Prefer whichever concept has the most recent data (companies switch tags over time).
         if values and (best is None or values[0]["period_end"] > best["values"][0]["period_end"]):
@@ -122,7 +127,7 @@ def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: i
 
     if best is None:
         raise CompanyNotFoundError(f"No annual '{metric}' data reported by {company['name']}")
-    return {
+    result = {
         "company": company["name"],
         "ticker": company["ticker"],
         "metric": metric,
@@ -130,6 +135,22 @@ def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: i
         "unit": best["unit"],
         "annual_values": best["values"][:years],
     }
+    latest = date.fromisoformat(best["values"][0]["period_end"])
+    if date.today() - latest > STALE_AFTER:
+        # Tell the model explicitly, so old data is never presented as current.
+        result["warning"] = (
+            f"Latest value is for the period ending {latest}. The company may now report this "
+            "metric under a different XBRL concept; do not treat this as current data."
+        )
+    return result
+
+
+def _company_facts(cik: int, http: httpx.Client) -> dict:
+    if cik not in _facts_cache:
+        response = http.get(FACTS_URL.format(cik=cik))
+        response.raise_for_status()
+        _facts_cache[cik] = response.json()["facts"]
+    return _facts_cache[cik]
 
 
 def _annual_values(rows: list[dict]) -> list[dict]:

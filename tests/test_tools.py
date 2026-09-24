@@ -44,11 +44,11 @@ def test_run_get_financial_facts_returns_json() -> None:
 
 def test_missing_metric_is_reported_as_error() -> None:
     result, is_error = run_tool(
-        "get_financial_facts", {"ticker": "AAPL", "metric": "gross_profit"}, http=make_http()
+        "get_financial_facts", {"ticker": "AAPL", "metric": "operating_income"}, http=make_http()
     )
 
     assert is_error
-    assert "gross_profit" in result
+    assert "operating_income" in result
 
 
 def test_unknown_ticker_is_reported_as_error() -> None:

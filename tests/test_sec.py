@@ -48,11 +48,18 @@ ASSET_ROWS = [
     {"end": "2024-09-28", "val": 365, "filed": "2024-11-01", "form": "10-K"},
     {"end": "2025-09-27", "val": 359, "filed": "2025-10-31", "form": "10-K"},
 ]
+# Old-style net income tag that stopped in 2013 + the ProfitLoss tag used since (Mastercard).
+OLD_NET_INCOME_ROWS = [fy("2012-01-01", "2012-12-31", 3, "2013-02-15")]
+PROFIT_LOSS_ROWS = [fy("2024-09-29", "2025-09-27", 112, "2025-10-31")]
 CONCEPTS = {
     "RevenueFromContractWithCustomerExcludingAssessedTax": REVENUE_ROWS,
     "Revenues": OLD_REVENUE_ROWS,
     "Assets": ASSET_ROWS,
+    "NetIncomeLoss": OLD_NET_INCOME_ROWS,
+    "ProfitLoss": PROFIT_LOSS_ROWS,
+    "GrossProfit": [],  # present but empty - must not count as data
 }
+FACTS = {"facts": {"us-gaap": {c: {"units": {"USD": rows}} for c, rows in CONCEPTS.items()}}}
 
 
 def fake_sec_server(request: httpx.Request) -> httpx.Response:
@@ -61,16 +68,15 @@ def fake_sec_server(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=TICKERS)
     if path == "/submissions/CIK0000320193.json":
         return httpx.Response(200, json=SUBMISSIONS)
-    if path.startswith("/api/xbrl/companyconcept/CIK0000320193/us-gaap/"):
-        concept = path.rsplit("/", 1)[1].removesuffix(".json")
-        if concept in CONCEPTS:
-            return httpx.Response(200, json={"units": {"USD": CONCEPTS[concept]}})
+    if path == "/api/xbrl/companyfacts/CIK0000320193.json":
+        return httpx.Response(200, json=FACTS)
     return httpx.Response(404)
 
 
 @pytest.fixture(autouse=True)
 def clear_ticker_cache():
     sec._tickers_cache.clear()
+    sec._facts_cache.clear()
 
 
 @pytest.fixture
@@ -123,7 +129,45 @@ def test_annual_financials_handles_balance_sheet_items(http) -> None:
 
 def test_annual_financials_missing_metric_raises(http) -> None:
     with pytest.raises(sec.CompanyNotFoundError):
+        sec.get_annual_financials("AAPL", "operating_income", http)
+
+
+def test_concept_with_no_rows_is_not_data(http) -> None:
+    # Regression: SEC returned an empty row list for Visa's NetIncomeLoss.
+    with pytest.raises(sec.CompanyNotFoundError):
         sec.get_annual_financials("AAPL", "gross_profit", http)
+
+
+def test_prefers_the_concept_with_the_newest_data(http) -> None:
+    # Regression: Mastercard's NetIncomeLoss stops in 2013; it reports ProfitLoss since.
+    result = sec.get_annual_financials("AAPL", "net_income", http)
+
+    assert result["xbrl_concept"] == "ProfitLoss"
+    assert result["annual_values"][0]["period_end"] == "2025-09-27"
+
+
+def test_stale_data_carries_a_warning(http, monkeypatch) -> None:
+    monkeypatch.setitem(sec.METRICS, "net_income", ["NetIncomeLoss"])  # only the 2012 data
+
+    result = sec.get_annual_financials("AAPL", "net_income", http)
+
+    assert "2012-12-31" in result["warning"]
+
+
+def test_recent_data_has_no_warning(http) -> None:
+    assert "warning" not in sec.get_annual_financials("AAPL", "revenue", http)
+
+
+def test_company_facts_downloaded_once_for_several_metrics() -> None:
+    calls = []
+    counting = httpx.Client(
+        transport=httpx.MockTransport(lambda r: calls.append(r.url.path) or fake_sec_server(r))
+    )
+
+    sec.get_annual_financials("AAPL", "revenue", counting)
+    sec.get_annual_financials("AAPL", "total_assets", counting)
+
+    assert calls.count("/api/xbrl/companyfacts/CIK0000320193.json") == 1
 
 
 def test_annual_financials_unknown_metric_raises(http) -> None:
