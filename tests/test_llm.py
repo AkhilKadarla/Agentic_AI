@@ -133,11 +133,42 @@ def test_research_runs_requested_tool_and_sends_result_back() -> None:
     ]
 
 
-def test_research_stops_after_one_round() -> None:
+def test_research_loops_through_multiple_rounds() -> None:
+    # Round 1: Claude looks up revenue. Round 2: having seen it, asks for net income.
+    revenue = tool_use_block("get_financial_facts", {"ticker": "AAPL", "metric": "revenue"})
+    income = tool_use_block("get_financial_facts", {"ticker": "AAPL", "metric": "net_income"}, "t2")
+    client = scripted_client(
+        ([revenue], "tool_use"),
+        ([income], "tool_use"),
+        ([text_block("Apple's net margin is ...")], "end_turn"),
+    )
+    tool_runner = MagicMock(return_value=("{}", False))
+
+    answer = research("What is Apple's net margin?", client=client, tool_runner=tool_runner)
+
+    assert answer.text == "Apple's net margin is ..."
+    assert tool_runner.call_count == 2
+    assert client.beta.messages.create.call_count == 3
+    # user, assistant, tool results, assistant, tool results
+    assert len(client.beta.messages.create.call_args.kwargs["messages"]) == 5
+
+
+def test_research_stops_at_max_turns() -> None:
     call = tool_use_block("get_company_filings", {"ticker": "AAPL"})
-    client = scripted_client(([call], "tool_use"), ([call], "tool_use"))
+    client = scripted_client(*[([call], "tool_use")] * 3)
 
-    answer = research("q", client=client, tool_runner=MagicMock(return_value=("{}", False)))
+    answer = research(
+        "q", client=client, tool_runner=MagicMock(return_value=("{}", False)), max_turns=3
+    )
 
-    assert "agent loop" in answer.text
-    assert client.beta.messages.create.call_count == 2
+    assert "safety limit" in answer.text
+    assert client.beta.messages.create.call_count == 3
+
+
+def test_research_flags_truncated_answer() -> None:
+    client = scripted_client(([text_block("Partial answ")], "max_tokens"))
+
+    answer = research("q", client=client, tool_runner=MagicMock())
+
+    assert answer.text.startswith("Partial answ")
+    assert "max_tokens" in answer.text

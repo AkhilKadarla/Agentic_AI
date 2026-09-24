@@ -5,12 +5,44 @@ and allows at most 10 requests per second.
 """
 
 import os
+from datetime import date
 
 import httpx
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
+CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik:010d}/us-gaap/{concept}.json"
+
+# Companies tag the same number with different XBRL "concepts" (e.g. Apple reports revenue as
+# RevenueFromContract..., NVIDIA as Revenues), so each metric lists the candidates to try.
+METRICS = {
+    "revenue": [
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "SalesRevenueNet",
+    ],
+    "gross_profit": ["GrossProfit"],
+    "operating_income": ["OperatingIncomeLoss"],
+    "net_income": ["NetIncomeLoss"],
+    "eps_diluted": ["EarningsPerShareDiluted"],
+    "operating_cash_flow": ["NetCashProvidedByUsedInOperatingActivities"],
+    "capital_expenditures": [
+        "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
+    ],
+    "total_assets": ["Assets"],
+    "total_liabilities": ["Liabilities"],
+    "shareholders_equity": ["StockholdersEquity"],
+    "cash": [
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ],
+    "long_term_debt": ["LongTermDebtNoncurrent", "LongTermDebt"],
+}
+
+# The ticker list is ~1 MB and rarely changes: download it once per run, not per tool call.
+_tickers_cache: dict = {}
 
 
 class CompanyNotFoundError(ValueError):
@@ -26,9 +58,11 @@ def make_http_client() -> httpx.Client:
 
 def lookup_company(ticker: str, http: httpx.Client) -> dict:
     """Map a stock ticker (e.g. "AAPL") to the company's name and SEC CIK number."""
-    response = http.get(TICKERS_URL)
-    response.raise_for_status()
-    for company in response.json().values():
+    if not _tickers_cache:
+        response = http.get(TICKERS_URL)
+        response.raise_for_status()
+        _tickers_cache.update(response.json())
+    for company in _tickers_cache.values():
         if company["ticker"].upper() == ticker.upper():
             return {"cik": company["cik_str"], "name": company["title"], "ticker": ticker.upper()}
     raise CompanyNotFoundError(f"No SEC-registered company found for ticker '{ticker}'")
@@ -66,3 +100,60 @@ def get_recent_filings(
             break
 
     return {"company": company["name"], "ticker": company["ticker"], "filings": filings}
+
+
+def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: int = 5) -> dict:
+    """Return a company's annual values for one metric, from its 10-K filings, newest first."""
+    if metric not in METRICS:
+        raise ValueError(f"Unknown metric '{metric}'. Choose from: {', '.join(METRICS)}")
+    company = lookup_company(ticker, http)
+
+    best: dict | None = None
+    for concept in METRICS[metric]:
+        response = http.get(CONCEPT_URL.format(cik=company["cik"], concept=concept))
+        if response.status_code == 404:  # this company doesn't use this concept
+            continue
+        response.raise_for_status()
+        unit, rows = next(iter(response.json()["units"].items()))
+        values = _annual_values(rows)
+        # Prefer whichever concept has the most recent data (companies switch tags over time).
+        if values and (best is None or values[0]["period_end"] > best["values"][0]["period_end"]):
+            best = {"concept": concept, "unit": unit, "values": values}
+
+    if best is None:
+        raise CompanyNotFoundError(f"No annual '{metric}' data reported by {company['name']}")
+    return {
+        "company": company["name"],
+        "ticker": company["ticker"],
+        "metric": metric,
+        "xbrl_concept": best["concept"],
+        "unit": best["unit"],
+        "annual_values": best["values"][:years],
+    }
+
+
+def _annual_values(rows: list[dict]) -> list[dict]:
+    """Keep one full-year value per fiscal period, taken from the most recent 10-K.
+
+    Each 10-K also repeats prior years for comparison, and flow metrics (revenue, cash flow)
+    include quarterly rows too, so we filter to ~12-month periods and de-duplicate by period
+    end date. The latest filing wins, which picks up any restatements.
+    """
+    by_period: dict[str, dict] = {}
+    for row in rows:
+        if row.get("form") not in ("10-K", "10-K/A"):
+            continue
+        if "start" in row and not _is_full_year(row["start"], row["end"]):
+            continue
+        current = by_period.get(row["end"])
+        if current is None or row["filed"] > current["filed"]:
+            by_period[row["end"]] = row
+    return [
+        {"period_end": end, "value": row["val"], "filed": row["filed"]}
+        for end, row in sorted(by_period.items(), reverse=True)
+    ]
+
+
+def _is_full_year(start: str, end: str) -> bool:
+    days = (date.fromisoformat(end) - date.fromisoformat(start)).days
+    return 350 <= days <= 380

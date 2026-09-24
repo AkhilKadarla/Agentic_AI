@@ -11,7 +11,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 0 - Foundation:** uv, Python 3.12, project layout, secrets handling
 - [x] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
 - [x] **Phase 2 - CI/CD:** GitHub Actions, branch protection
-- [ ] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
+- [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [ ] **Phase 4 - Real agent:** SEC EDGAR tools, memory, MCP, structured outputs
 - [ ] **Phase 5 - Evals & observability:** test agent quality, tracing
 - [ ] **Phase 6 - Deploy:** Docker + cloud deployment
@@ -24,7 +24,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
 uv run finsight ask "What is EBITDA?"   # ask Claude a finance question
-uv run finsight research "When did NVIDIA file its last 10-K?"   # Claude + live SEC data
+uv run finsight research "Compare Apple and Microsoft revenue growth"   # agent + live SEC data
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
