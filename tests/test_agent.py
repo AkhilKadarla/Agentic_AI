@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult
 from finsight.cli import chat
 
@@ -168,3 +170,67 @@ def test_usage_line_shows_all_input_buckets(capsys) -> None:
     chat(ResearchAgent(client=client), read=lambda prompt: next(inputs))
 
     assert "10 new + 0 cache-write + 900 cache-read | out: 5" in capsys.readouterr().out
+
+
+# ---------- write_note(): structured output ----------
+
+
+def parse_response(parsed_output, stop_reason="end_turn"):
+    return SimpleNamespace(
+        parsed_output=parsed_output,
+        stop_reason=stop_reason,
+        usage=SimpleNamespace(
+            input_tokens=3,
+            output_tokens=400,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=2000,
+        ),
+    )
+
+
+def test_write_note_requests_structured_output_without_changing_memory() -> None:
+    from tests.test_notes import sample_note
+
+    client = scripted_client(FakeStream([text_block("Apple grew ...")], "end_turn"))
+    client.beta.messages.parse.return_value = parse_response(sample_note())
+    agent = ResearchAgent(client=client)
+    list(agent.send("Apple revenue?"))
+
+    note, usage = agent.write_note()
+
+    request = client.beta.messages.parse.call_args.kwargs
+    assert request["output_format"].__name__ == "ResearchNote"
+    assert request["tool_choice"] == {"type": "none"}
+    assert "research note" in request["messages"][-1]["content"]
+    assert note.tickers == ["AAPL"]
+    assert usage.cache_write_tokens == 2000
+    assert len(agent.messages) == 2  # the note request was not added to memory
+
+
+def test_write_note_with_empty_conversation_raises() -> None:
+    with pytest.raises(ValueError, match="Nothing to summarize"):
+        ResearchAgent(client=MagicMock()).write_note()
+
+
+def test_write_note_without_parsed_output_raises() -> None:
+    client = scripted_client(FakeStream([text_block("hi")], "end_turn"))
+    client.beta.messages.parse.return_value = parse_response(None, stop_reason="refusal")
+    agent = ResearchAgent(client=client)
+    list(agent.send("q"))
+
+    with pytest.raises(ValueError, match="refusal"):
+        agent.write_note()
+
+
+def test_chat_note_command_saves_note(monkeypatch, tmp_path, capsys) -> None:
+    from tests.test_notes import sample_note
+
+    monkeypatch.chdir(tmp_path)  # save_note writes to ./reports
+    client = scripted_client(FakeStream([text_block("Apple grew ...")], "end_turn"))
+    client.beta.messages.parse.return_value = parse_response(sample_note())
+    inputs = iter(["Apple revenue?", "/note", "/exit"])
+
+    chat(ResearchAgent(client=client), read=lambda prompt: next(inputs))
+
+    assert "# Apple: Revenue Check / FY2025" in capsys.readouterr().out
+    assert len(list((tmp_path / "reports").glob("*.json"))) == 1

@@ -12,7 +12,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
 - [x] **Phase 2 - CI/CD:** GitHub Actions, branch protection, Dependabot
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
-- [ ] **Phase 4 - Agent upgrades:** streaming + conversation memory ✅, structured research notes
+- [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [ ] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
 - [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Knowledge Base (RAG) over 10-Ks, Guardrails
 - [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
@@ -28,7 +28,8 @@ uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
 uv run finsight ask "What is EBITDA?"   # ask Claude a finance question
 uv run finsight research "Compare Apple and Microsoft revenue growth"   # agent + live SEC data
-uv run finsight chat     # interactive chat with follow-up questions
+uv run finsight note "Assess Costco's financial health"   # research + save a structured note
+uv run finsight chat     # interactive chat; /note saves a note from the conversation
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
@@ -48,6 +49,7 @@ src/finsight/   # application code
   cli.py        # command-line interface
   agent.py      # research agent: loop, memory, streaming events
   llm.py        # simplest single Claude call (ask)
+  notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   tools.py      # tool definitions Claude can call
   sec.py        # SEC EDGAR API client
   config.py     # settings loaded from .env
