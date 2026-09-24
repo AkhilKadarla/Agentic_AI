@@ -24,6 +24,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
 uv run finsight ask "What is EBITDA?"   # ask Claude a finance question
+uv run finsight research "When did NVIDIA file its last 10-K?"   # Claude + live SEC data
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
@@ -41,7 +42,9 @@ uv run pre-commit run --all-files   # run every commit hook
 ```
 src/finsight/   # application code
   cli.py        # command-line interface
-  llm.py        # calls to Claude
+  llm.py        # calls to Claude (ask, research)
+  tools.py      # tool definitions Claude can call
+  sec.py        # SEC EDGAR API client
   config.py     # settings loaded from .env
 tests/          # automated tests (Phase 1)
 ```

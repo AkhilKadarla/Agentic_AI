@@ -21,5 +21,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Workflow: feature branch -> pull request -> CI green -> merge to `main`
 - Every new feature gets tests in `tests/`; all checks must pass before committing
 - Model: `claude-opus-5` by default (override with FINSIGHT_MODEL); SDK: `anthropic`
-- Tests must never call the real API - inject a fake client (see tests/test_llm.py)
+- Tests must never call the real API or network - inject a fake client (tests/test_llm.py)
+  or an httpx.MockTransport (tests/test_sec.py)
+- New tools: add the definition to TOOLS and the implementation to run_tool() in tools.py;
+  return errors to Claude as (message, True) instead of raising
 - Never present outputs as financial advice
