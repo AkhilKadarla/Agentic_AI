@@ -19,11 +19,15 @@ STALE_AFTER = timedelta(days=548)  # ~18 months: an annual figure older than thi
 
 # Companies tag the same number with different XBRL "concepts" (e.g. Apple reports revenue as
 # RevenueFromContract..., NVIDIA as Revenues), so each metric lists the candidates to try.
+# The concept with the newest data wins; on a tie, the one listed first wins, so list the
+# preferred (most standard) concept first. Results include the concept used, so the
+# model can see e.g. that equity includes minority interests.
 METRICS = {
     "revenue": [
         "Revenues",
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "SalesRevenueNet",
+        "RevenuesNetOfInterestExpense",  # banks such as Goldman Sachs
     ],
     "gross_profit": ["GrossProfit"],
     "operating_income": ["OperatingIncomeLoss"],
@@ -37,12 +41,21 @@ METRICS = {
     ],
     "total_assets": ["Assets"],
     "total_liabilities": ["Liabilities"],
-    "shareholders_equity": ["StockholdersEquity"],
+    "shareholders_equity": [
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",  # Visa, J&J
+    ],
     "cash": [
         "CashAndCashEquivalentsAtCarryingValue",
         "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
     ],
-    "long_term_debt": ["LongTermDebtNoncurrent", "LongTermDebt"],
+    "long_term_debt": [
+        "LongTermDebtNoncurrent",
+        "LongTermDebt",
+        "LongTermDebtAndCapitalLeaseObligations",  # Coca-Cola: includes finance leases
+        "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",  # JPMorgan
+        "UnsecuredLongTermDebt",  # Goldman Sachs
+    ],
 }
 
 # The ticker list is ~1 MB and rarely changes: download it once per run, not per tool call.
@@ -114,6 +127,13 @@ def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: i
         raise ValueError(f"Unknown metric '{metric}'. Choose from: {', '.join(METRICS)}")
     company = lookup_company(ticker, http)
     us_gaap = _company_facts(company["cik"], http).get("us-gaap", {})
+    if not _has_annual_reports(us_gaap):
+        raise CompanyNotFoundError(
+            f"{company['name']} (CIK {company['cik']}) has no annual (10-K) financial data "
+            "with the SEC yet. It may be a newly registered entity, such as a new holding "
+            "company whose history is filed under a predecessor; use get_company_filings "
+            "to see what it has filed."
+        )
 
     best: dict | None = None
     for concept in METRICS[metric]:
@@ -145,11 +165,23 @@ def get_annual_financials(ticker: str, metric: str, http: httpx.Client, years: i
     return result
 
 
+def _has_annual_reports(us_gaap: dict) -> bool:
+    return any(
+        row.get("form") in ("10-K", "10-K/A")
+        for concept in us_gaap.values()
+        for rows in concept["units"].values()
+        for row in rows
+    )
+
+
 def _company_facts(cik: int, http: httpx.Client) -> dict:
     if cik not in _facts_cache:
         response = http.get(FACTS_URL.format(cik=cik))
-        response.raise_for_status()
-        _facts_cache[cik] = response.json()["facts"]
+        if response.status_code == 404:  # registrant has never filed XBRL financials
+            _facts_cache[cik] = {}
+        else:
+            response.raise_for_status()
+            _facts_cache[cik] = response.json()["facts"]
     return _facts_cache[cik]
 
 

@@ -8,6 +8,7 @@ from finsight import sec
 TICKERS = {
     "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
     "1": {"cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA CORP"},
+    "2": {"cik_str": 2115436, "ticker": "XOM", "title": "ExxonMobil Holdings Corp"},
 }
 
 SUBMISSIONS = {
@@ -58,6 +59,9 @@ CONCEPTS = {
     "NetIncomeLoss": OLD_NET_INCOME_ROWS,
     "ProfitLoss": PROFIT_LOSS_ROWS,
     "GrossProfit": [],  # present but empty - must not count as data
+    # Two long-term debt concepts with the same latest period: the first listed must win.
+    "LongTermDebtNoncurrent": [dict(ASSET_ROWS[1], val=79)],
+    "LongTermDebt": [dict(ASSET_ROWS[1], val=91)],
 }
 FACTS = {"facts": {"us-gaap": {c: {"units": {"USD": rows}} for c, rows in CONCEPTS.items()}}}
 
@@ -185,3 +189,29 @@ def test_ticker_list_is_downloaded_once(http) -> None:
     sec.lookup_company("NVDA", counting)
 
     assert calls.count("/files/company_tickers.json") == 1
+
+
+def test_equally_recent_concepts_prefer_the_first_listed(http) -> None:
+    result = sec.get_annual_financials("AAPL", "long_term_debt", http)
+
+    assert result["xbrl_concept"] == "LongTermDebtNoncurrent"
+
+
+def test_company_without_financial_data_gets_a_clear_error(http) -> None:
+    # A registrant that has never filed XBRL financials (SEC returns 404).
+    with pytest.raises(sec.CompanyNotFoundError, match="no annual"):
+        sec.get_annual_financials("XOM", "revenue", http)
+
+
+def test_company_with_only_quarterly_data_gets_a_clear_error() -> None:
+    # ExxonMobil's ticker now points to a new holding company with only a 10-Q so far.
+    quarterly = {"units": {"USD": [fy("2026-01-01", "2026-06-30", 5, "2026-08-03", "10-Q")]}}
+
+    def server(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/xbrl/companyfacts/CIK0002115436.json":
+            return httpx.Response(200, json={"facts": {"us-gaap": {"Revenues": quarterly}}})
+        return fake_sec_server(request)
+
+    http = httpx.Client(transport=httpx.MockTransport(server))
+    with pytest.raises(sec.CompanyNotFoundError, match="predecessor"):
+        sec.get_annual_financials("XOM", "revenue", http)
