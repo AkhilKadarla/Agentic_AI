@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "FinSight: an AI research analyst agent for financial filings and market data"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "anthropic>=1.8.0",
+    "python-dotenv>=1.2.3",
+]
 
 [project.scripts]
-finsight = "finsight:main"
+finsight = "finsight.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]
