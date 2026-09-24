@@ -7,8 +7,12 @@ import anthropic
 from finsight import __version__
 from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult, Usage
 from finsight.llm import ask
+from finsight.notes import render_markdown, save_note
 
-CHAT_HELP = "Commands: /reset (forget conversation), /usage (tokens so far), /exit"
+CHAT_HELP = (
+    "Commands: /note (save a research note), /reset (forget conversation), "
+    "/usage (tokens so far), /exit"
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -22,6 +26,10 @@ def main(argv: list[str] | None = None) -> None:
         "research", help="research one question using live SEC data (agent + tools)"
     )
     research_cmd.add_argument("question", help='e.g. "How has Apple\'s revenue changed?"')
+    note_cmd = commands.add_parser(
+        "note", help="research a question and save a structured research note"
+    )
+    note_cmd.add_argument("question", help='e.g. "Assess Apple\'s financial health"')
     commands.add_parser("chat", help="interactive research chat with follow-up questions")
     args = parser.parse_args(argv)
 
@@ -39,6 +47,10 @@ def main(argv: list[str] | None = None) -> None:
             print(f"\n[tokens used: {answer.input_tokens} in / {answer.output_tokens} out]")
         elif args.command == "research":
             print_events(ResearchAgent().send(args.question))
+        elif args.command == "note":
+            agent = ResearchAgent()
+            print_events(agent.send(args.question))
+            make_note(agent)
         else:
             chat()
     except anthropic.AuthenticationError:
@@ -65,12 +77,26 @@ def chat(agent: ResearchAgent | None = None, read=input) -> None:
         if message == "/reset":
             agent.reset()
             print("(conversation cleared)\n")
+        elif message == "/note":
+            make_note(agent)
         elif message == "/usage":
             print(f"({format_usage(agent.total_usage)})\n")
         elif message:
             print("\nfinsight> ", end="")
             print_events(agent.send(message))
             print()
+
+
+def make_note(agent: ResearchAgent) -> None:
+    print("Writing research note...")
+    try:
+        note, usage = agent.write_note()
+    except ValueError as e:
+        print(f"({e})\n")
+        return
+    path = save_note(note)
+    print(f"\n{render_markdown(note)}\n")
+    print(f"Saved: {path} (+ .md)  [{format_usage(usage)}]\n")
 
 
 def print_events(events) -> None:

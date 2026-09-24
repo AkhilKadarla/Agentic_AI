@@ -12,6 +12,7 @@ import anthropic
 
 from finsight.config import MODEL
 from finsight.llm import SYSTEM_PROMPT
+from finsight.notes import NOTE_INSTRUCTIONS, ResearchNote
 from finsight.tools import TOOLS, run_tool
 
 MAX_TURNS = 10
@@ -133,21 +134,51 @@ class ResearchAgent:
             usage,
         )
 
+    def write_note(self) -> tuple[ResearchNote, Usage]:
+        """Turn the research conversation so far into a structured, validated ResearchNote.
+
+        The request is the same conversation plus one instruction, so the cached prefix is
+        reused. The note request is not added to memory, so chatting can continue after it.
+        """
+        if not self.messages:
+            raise ValueError("Nothing to summarize yet - ask a research question first.")
+        response = self.client.beta.messages.parse(
+            **self._request_options(),
+            max_tokens=16000,
+            messages=[*self.messages, {"role": "user", "content": NOTE_INSTRUCTIONS}],
+            tool_choice={"type": "none"},  # write the note now; no more data fetching
+            output_format=ResearchNote,  # the reply must match this Pydantic model
+        )
+        usage = Usage()
+        usage.add(response.usage)
+        self.total_usage.add(response.usage)
+        if response.parsed_output is None:  # e.g. a refusal, so there is no JSON to parse
+            raise ValueError(f"Could not produce a note (stop reason: {response.stop_reason})")
+        return response.parsed_output, usage
+
     def _stream(self):
         return self.client.beta.messages.stream(
-            model=MODEL,
+            **self._request_options(),
             max_tokens=64000,  # streaming avoids HTTP timeouts, so give long answers room
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
             messages=self.messages,
+        )
+
+    @staticmethod
+    def _request_options() -> dict:
+        """Settings shared by every request. Keeping system + tools identical across
+        requests is what lets the prompt cache be reused."""
+        return {
+            "model": MODEL,
+            "system": SYSTEM_PROMPT,
+            "tools": TOOLS,
             # Prompt caching: the conversation prefix (system + tools + history) is re-sent
             # every turn; caching it makes those repeated input tokens ~90% cheaper.
-            cache_control={"type": "ephemeral"},
+            "cache_control": {"type": "ephemeral"},
             # If a safety classifier declines the request, the API retries it on a
             # fallback model automatically instead of just stopping.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        )
+            "betas": ["server-side-fallback-2026-07-01"],
+            "fallbacks": "default",
+        }
 
     @staticmethod
     def _final_text(response) -> str:

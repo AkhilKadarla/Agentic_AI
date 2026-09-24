@@ -23,6 +23,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Agent: `ResearchAgent` in agent.py (loop capped by MAX_TURNS, memory in .messages,
   yields TextDelta/ToolCall/ToolResult/Done events; UIs render events, never print in agent); SEC financial metrics map to
   candidate XBRL concepts in `sec.METRICS`
+- Structured output: `ResearchNote` (notes.py) via `client.beta.messages.parse(output_format=...)`;
+  notes save to reports/ (git-ignored)
 - Model: `claude-opus-5` by default (override with FINSIGHT_MODEL); SDK: `anthropic`
 - Tests must never call the real API or network - inject a fake client (tests/test_llm.py)
   or an httpx.MockTransport (tests/test_sec.py)
