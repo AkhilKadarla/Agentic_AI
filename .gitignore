@@ -5,8 +5,13 @@ __pycache__/
 build/
 dist/
 
-# Virtual environment (uv creates this)
+# Virtual environments (uv creates .venv; the others are common alternatives)
 .venv/
+venv/
+env/
+
+# Logs
+*.log
 
 # Tool caches
 .pytest_cache/
