@@ -1,0 +1,50 @@
+# CI: runs on every push to main and every pull request.
+# It repeats the same checks you run locally, but on a clean GitHub-hosted machine,
+# so "it works on my laptop" is never the only proof.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # lets you trigger a run manually from the Actions tab
+
+# Cancel an older run if you push again to the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the workflow can only read the repo
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0 # no floating major tag; Dependabot bumps this
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check --output-format=github .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0 # no floating major tag; Dependabot bumps this
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Run pytest
+        run: uv run pytest

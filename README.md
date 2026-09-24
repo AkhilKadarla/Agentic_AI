@@ -1,5 +1,7 @@
 # FinSight
 
+[![CI](https://github.com/AkhilKadarla/Agentic_AI/actions/workflows/ci.yml/badge.svg)](https://github.com/AkhilKadarla/Agentic_AI/actions/workflows/ci.yml)
+
 An AI research analyst agent for the finance industry. FinSight reads public company
 filings (SEC EDGAR), financial statements and market data, then produces analyst-style
 research notes, built step by step to learn modern agentic AI engineering.
@@ -8,7 +10,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 
 - [x] **Phase 0 - Foundation:** uv, Python 3.12, project layout, secrets handling
 - [x] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
-- [ ] **Phase 2 - CI/CD:** GitHub Actions, branch protection
+- [x] **Phase 2 - CI/CD:** GitHub Actions, branch protection
 - [ ] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [ ] **Phase 4 - Real agent:** SEC EDGAR tools, memory, MCP, structured outputs
 - [ ] **Phase 5 - Evals & observability:** test agent quality, tracing
