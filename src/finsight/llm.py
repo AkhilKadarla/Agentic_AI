@@ -1,8 +1,8 @@
 """Calls to Claude.
 
-Phase 3, step 1 - `ask()`: a single request/response, no tools.
-Phase 3, step 2 - `research()`: one tool-use round trip. Claude can ask us to run a tool,
-we run it and send back the result, and Claude answers using real data.
+- `ask()`: a single request/response, no tools.
+- `research()`: the agent loop. Claude calls tools (live SEC data) as many rounds as it
+  needs, then answers.
 """
 
 from collections.abc import Callable
@@ -16,7 +16,14 @@ from finsight.tools import TOOLS, run_tool
 SYSTEM_PROMPT = """You are FinSight, a financial research analyst assistant.
 Explain financial concepts, companies, and filings clearly and accurately.
 When you are unsure or lack current data, say so instead of guessing.
-You provide educational analysis, not investment advice."""
+You provide educational analysis, not investment advice.
+
+When a question is about a specific company, use your tools to get real data from SEC
+filings rather than relying on memory. Plan which data you need, fetch it (in parallel
+when calls are independent), and base your answer on the fetched figures. State the fiscal
+periods you are using and show key numbers, including any calculations you make."""
+
+MAX_TURNS = 10
 
 
 @dataclass
@@ -63,23 +70,33 @@ def research(
     client: anthropic.Anthropic | None = None,
     tool_runner: Callable[[str, dict], tuple[str, bool]] = run_tool,
     on_tool_call: Callable[[str, dict], None] | None = None,
+    max_turns: int = MAX_TURNS,
 ) -> Answer:
-    """Answer a question with ONE round of tool use.
+    """The agent loop: let Claude call tools, round after round, until it has an answer.
 
-    1. Send the question plus the tool definitions.
-    2. If Claude replies with stop_reason "tool_use", run each requested tool.
-    3. Send the results back so Claude can write its final answer.
+    Each turn:
+      1. Send the whole conversation so far (plus the tool definitions) to Claude.
+      2. If Claude is done (stop_reason != "tool_use"), return its answer.
+      3. Otherwise run every tool it asked for, append the results, and go again.
 
-    If Claude still wants more tools after that, we stop - handling any number of rounds
-    is exactly what the agent loop in step 3 adds.
+    `max_turns` is a safety limit: an agent that keeps calling tools would otherwise
+    keep spending money forever.
     """
     client = client or anthropic.Anthropic()
     messages = [{"role": "user", "content": question}]
+    input_tokens = output_tokens = 0
 
-    response = _create(client, messages, tools=TOOLS)
-    input_tokens, output_tokens = response.usage.input_tokens, response.usage.output_tokens
+    for _turn in range(max_turns):
+        response = _create(client, messages, tools=TOOLS)
+        input_tokens += response.usage.input_tokens
+        output_tokens += response.usage.output_tokens
 
-    if response.stop_reason == "tool_use":
+        if response.stop_reason != "tool_use":
+            text = _text_of(response)
+            if response.stop_reason == "max_tokens":
+                text += "\n\n[Answer cut off: hit the max_tokens limit.]"
+            return Answer(text, input_tokens, output_tokens)
+
         # Claude's turn (including its tool_use blocks) must go into the history unchanged.
         messages.append({"role": "assistant", "content": response.content})
 
@@ -101,16 +118,9 @@ def research(
         # All results go back together, in a single user message.
         messages.append({"role": "user", "content": tool_results})
 
-        response = _create(client, messages, tools=TOOLS)
-        input_tokens += response.usage.input_tokens
-        output_tokens += response.usage.output_tokens
-
-        if response.stop_reason == "tool_use":
-            return Answer(
-                "Claude wanted to call more tools - multi-step research arrives with the "
-                "agent loop in Phase 3, step 3.",
-                input_tokens,
-                output_tokens,
-            )
-
-    return Answer(_text_of(response), input_tokens, output_tokens)
+    return Answer(
+        f"Stopped after {max_turns} turns without a final answer (safety limit). "
+        "Try a narrower question.",
+        input_tokens,
+        output_tokens,
+    )
