@@ -54,4 +54,8 @@ src/finsight/   # application code
 tests/          # automated tests (Phase 1)
 ```
 
+## License
+
+[MIT](LICENSE)
+
 > Disclaimer: FinSight is a learning project and does not provide financial advice.
