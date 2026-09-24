@@ -7,7 +7,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 ## Roadmap
 
 - [x] **Phase 0 - Foundation:** uv, Python 3.12, project layout, secrets handling
-- [ ] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
+- [x] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
 - [ ] **Phase 2 - CI/CD:** GitHub Actions, branch protection
 - [ ] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [ ] **Phase 4 - Real agent:** SEC EDGAR tools, memory, MCP, structured outputs
@@ -22,6 +22,16 @@ Requires [uv](https://docs.astral.sh/uv/).
 uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
 uv run finsight          # run the app
+uv run pre-commit install   # one-time: enable git commit hooks
+```
+
+## Development checks
+
+```bash
+uv run ruff check .          # lint (find bugs & style issues)
+uv run ruff format .         # auto-format code
+uv run pytest                # run tests with coverage
+uv run pre-commit run --all-files   # run every commit hook
 ```
 
 ## Project layout

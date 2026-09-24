@@ -1,0 +1,31 @@
+# Pre-commit runs these checks automatically on every `git commit`.
+# If a check fails (or auto-fixes a file), the commit is stopped: review, `git add`, commit again.
+# Run manually on all files: `uv run pre-commit run --all-files`
+
+repos:
+  # General hygiene checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: detect-private-key      # blocks accidentally committed keys
+      - id: no-commit-to-branch     # forces the feature-branch workflow
+        args: [--branch, main]
+
+  # Ruff runs from our uv environment, so its version always matches uv.lock
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (lint + autofix)
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
