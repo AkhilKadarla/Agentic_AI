@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from finsight.cli import main
-from finsight.llm import Answer, ask
+from finsight.llm import Answer, ask, research
 
 
 def fake_client(content, stop_reason="end_turn"):
@@ -68,3 +68,76 @@ def test_cli_ask_prints_answer_and_tokens(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
     assert "answer to What is P/E?" in output
     assert "1 in / 2 out" in output
+
+
+# ---------- research(): one tool-use round trip ----------
+
+
+def tool_use_block(name, tool_input, block_id="toolu_1"):
+    return SimpleNamespace(type="tool_use", id=block_id, name=name, input=tool_input)
+
+
+def scripted_client(*responses):
+    """A fake client that returns the given (content, stop_reason) pairs in order."""
+    client = MagicMock()
+    client.beta.messages.create.side_effect = [
+        SimpleNamespace(
+            content=content,
+            stop_reason=stop_reason,
+            usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        )
+        for content, stop_reason in responses
+    ]
+    return client
+
+
+def test_research_without_tool_use_answers_directly() -> None:
+    client = scripted_client(([text_block("EBITDA is ...")], "end_turn"))
+
+    answer = research("What is EBITDA?", client=client, tool_runner=MagicMock())
+
+    assert answer.text == "EBITDA is ..."
+    assert client.beta.messages.create.call_count == 1
+
+
+def test_research_runs_requested_tool_and_sends_result_back() -> None:
+    call = tool_use_block("get_company_filings", {"ticker": "AAPL"})
+    client = scripted_client(
+        ([call], "tool_use"),
+        ([text_block("Apple filed a 10-K on ...")], "end_turn"),
+    )
+    tool_runner = MagicMock(return_value=('{"filings": []}', False))
+    seen = []
+
+    answer = research(
+        "When did Apple file?",
+        client=client,
+        tool_runner=tool_runner,
+        on_tool_call=lambda name, args: seen.append(name),
+    )
+
+    tool_runner.assert_called_once_with("get_company_filings", {"ticker": "AAPL"})
+    assert seen == ["get_company_filings"]
+    assert answer.text == "Apple filed a 10-K on ..."
+    assert (answer.input_tokens, answer.output_tokens) == (20, 10)  # summed over both calls
+
+    followup = client.beta.messages.create.call_args.kwargs["messages"]
+    assert followup[1] == {"role": "assistant", "content": [call]}
+    assert followup[2]["content"] == [
+        {
+            "type": "tool_result",
+            "tool_use_id": "toolu_1",
+            "content": '{"filings": []}',
+            "is_error": False,
+        }
+    ]
+
+
+def test_research_stops_after_one_round() -> None:
+    call = tool_use_block("get_company_filings", {"ticker": "AAPL"})
+    client = scripted_client(([call], "tool_use"), ([call], "tool_use"))
+
+    answer = research("q", client=client, tool_runner=MagicMock(return_value=("{}", False)))
+
+    assert "agent loop" in answer.text
+    assert client.beta.messages.create.call_count == 2
