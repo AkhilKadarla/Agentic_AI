@@ -23,7 +23,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
-uv run finsight          # run the app
+uv run finsight ask "What is EBITDA?"   # ask Claude a finance question
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
@@ -40,6 +40,9 @@ uv run pre-commit run --all-files   # run every commit hook
 
 ```
 src/finsight/   # application code
+  cli.py        # command-line interface
+  llm.py        # calls to Claude
+  config.py     # settings loaded from .env
 tests/          # automated tests (Phase 1)
 ```
 
