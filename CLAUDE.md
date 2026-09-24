@@ -20,7 +20,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Secrets live in `.env` (git-ignored); document new ones in `.env.example`
 - Workflow: feature branch -> pull request -> CI green -> merge to `main`
 - Every new feature gets tests in `tests/`; all checks must pass before committing
-- Agent loop: `research()` in llm.py, capped by MAX_TURNS; SEC financial metrics map to
+- Agent: `ResearchAgent` in agent.py (loop capped by MAX_TURNS, memory in .messages,
+  yields TextDelta/ToolCall/ToolResult/Done events; UIs render events, never print in agent); SEC financial metrics map to
   candidate XBRL concepts in `sec.METRICS`
 - Model: `claude-opus-5` by default (override with FINSIGHT_MODEL); SDK: `anthropic`
 - Tests must never call the real API or network - inject a fake client (tests/test_llm.py)

@@ -10,11 +10,14 @@ research notes, built step by step to learn modern agentic AI engineering.
 
 - [x] **Phase 0 - Foundation:** uv, Python 3.12, project layout, secrets handling
 - [x] **Phase 1 - Code quality:** ruff, pytest, pre-commit hooks
-- [x] **Phase 2 - CI/CD:** GitHub Actions, branch protection
+- [x] **Phase 2 - CI/CD:** GitHub Actions, branch protection, Dependabot
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
-- [ ] **Phase 4 - Real agent:** SEC EDGAR tools, memory, MCP, structured outputs
-- [ ] **Phase 5 - Evals & observability:** test agent quality, tracing
-- [ ] **Phase 6 - Deploy:** Docker + cloud deployment
+- [ ] **Phase 4 - Agent upgrades:** streaming + conversation memory ✅, structured research notes
+- [ ] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
+- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Knowledge Base (RAG) over 10-Ks, Guardrails
+- [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
+- [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
+- [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
 
 ## Quickstart
 
@@ -25,6 +28,7 @@ uv sync                  # create .venv and install dependencies
 cp .env.example .env     # then fill in your keys
 uv run finsight ask "What is EBITDA?"   # ask Claude a finance question
 uv run finsight research "Compare Apple and Microsoft revenue growth"   # agent + live SEC data
+uv run finsight chat     # interactive chat with follow-up questions
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
@@ -42,7 +46,8 @@ uv run pre-commit run --all-files   # run every commit hook
 ```
 src/finsight/   # application code
   cli.py        # command-line interface
-  llm.py        # calls to Claude (ask, research)
+  agent.py      # research agent: loop, memory, streaming events
+  llm.py        # simplest single Claude call (ask)
   tools.py      # tool definitions Claude can call
   sec.py        # SEC EDGAR API client
   config.py     # settings loaded from .env
