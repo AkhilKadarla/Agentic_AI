@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Environment and logs
+.env
+*.log
+
+# Node.js
+node_modules/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
