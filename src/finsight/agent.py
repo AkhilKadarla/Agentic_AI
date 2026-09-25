@@ -2,7 +2,7 @@
 
 `ResearchAgent.send()` does not print anything. It *yields events* (text as it is written,
 tool calls, tool results, and a final summary). Any interface can consume the same events:
-the terminal CLI today, a web UI in Phase 5.
+the terminal CLI and the Streamlit web UI.
 """
 
 from collections.abc import Callable, Iterator
@@ -10,12 +10,20 @@ from dataclasses import dataclass
 
 import anthropic
 
-from finsight.config import MODEL, PRICING
+from finsight.config import PRICING
 from finsight.llm import SYSTEM_PROMPT
 from finsight.notes import NOTE_INSTRUCTIONS, ResearchNote
+from finsight.providers import (
+    automatic_caching,
+    make_client,
+    model_id,
+    pricing_key,
+    provider_options,
+)
 from finsight.tools import TOOLS, run_tool
 
 MAX_TURNS = 10
+CACHE = {"type": "ephemeral"}  # prompt-cache marker (5-minute lifetime)
 
 
 # ---------- Events the agent yields ----------
@@ -47,11 +55,11 @@ class Usage:
     cache_read_tokens: int = 0  # input tokens served from the prompt cache (~10% of the price)
     cache_write_tokens: int = 0
 
-    def cost_usd(self, model: str = MODEL) -> float | None:
+    def cost_usd(self, model: str | None = None) -> float | None:
         """Estimated cost in dollars, or None if we don't know the model's price."""
-        if model not in PRICING:
+        price = PRICING.get(pricing_key(model or model_id()))
+        if price is None:
             return None
-        price = PRICING[model]
         return (
             self.input_tokens * price["input"]
             + self.cache_write_tokens * price["input"] * 1.25
@@ -85,11 +93,11 @@ class ResearchAgent:
 
     def __init__(
         self,
-        client: anthropic.Anthropic | None = None,
+        client: anthropic.Anthropic | anthropic.AnthropicBedrock | None = None,
         tool_runner: Callable[[str, dict], tuple[str, bool]] = run_tool,
         max_turns: int = MAX_TURNS,
     ) -> None:
-        self.client = client or anthropic.Anthropic()
+        self.client = client or make_client()  # Anthropic API or Bedrock, per .env
         self.tool_runner = tool_runner
         self.max_turns = max_turns
         # The memory: the full conversation, re-sent to Claude on every request
@@ -154,10 +162,10 @@ class ResearchAgent:
         """
         if not self.messages:
             raise ValueError("Nothing to summarize yet - ask a research question first.")
+        note_request = {"role": "user", "content": NOTE_INSTRUCTIONS}
         response = self.client.beta.messages.parse(
-            **self._request_options(),
+            **self._request_options([*self.messages, note_request]),
             max_tokens=16000,
-            messages=[*self.messages, {"role": "user", "content": NOTE_INSTRUCTIONS}],
             tool_choice={"type": "none"},  # write the note now; no more data fetching
             output_format=ResearchNote,  # the reply must match this Pydantic model
         )
@@ -170,26 +178,33 @@ class ResearchAgent:
 
     def _stream(self):
         return self.client.beta.messages.stream(
-            **self._request_options(),
+            **self._request_options(self.messages),
             max_tokens=64000,  # streaming avoids HTTP timeouts, so give long answers room
-            messages=self.messages,
         )
 
     @staticmethod
-    def _request_options() -> dict:
+    def _request_options(messages: list[dict]) -> dict:
         """Settings shared by every request. Keeping system + tools identical across
-        requests is what lets the prompt cache be reused."""
+        requests is what lets the prompt cache be reused.
+
+        Prompt caching: the conversation prefix (tools + system + history) is re-sent every
+        turn; caching it makes those repeated input tokens ~90% cheaper.
+        """
+        options = {"tools": TOOLS, **provider_options()}  # model, thinking, fallbacks...
+        if automatic_caching():
+            # One setting: the API caches up to the end of the request automatically.
+            return {
+                **options,
+                "system": SYSTEM_PROMPT,
+                "messages": messages,
+                "cache_control": CACHE,
+            }
+        # Explicit breakpoints: cache everything up to the end of the system prompt, and
+        # everything up to the end of the newest message.
         return {
-            "model": MODEL,
-            "system": SYSTEM_PROMPT,
-            "tools": TOOLS,
-            # Prompt caching: the conversation prefix (system + tools + history) is re-sent
-            # every turn; caching it makes those repeated input tokens ~90% cheaper.
-            "cache_control": {"type": "ephemeral"},
-            # If a safety classifier declines the request, the API retries it on a
-            # fallback model automatically instead of just stopping.
-            "betas": ["server-side-fallback-2026-07-01"],
-            "fallbacks": "default",
+            **options,
+            "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": CACHE}],
+            "messages": _with_cache_breakpoint(messages),
         }
 
     @staticmethod
@@ -200,3 +215,19 @@ class ResearchAgent:
         if response.stop_reason == "max_tokens":
             text += "\n\n[Answer cut off: hit the max_tokens limit.]"
         return text
+
+
+def _with_cache_breakpoint(messages: list[dict]) -> list[dict]:
+    """Copy of `messages` with a cache breakpoint on the last block of the last message.
+
+    Copies instead of editing in place, so the agent's memory never accumulates markers
+    (a request may have at most 4 breakpoints).
+    """
+    *earlier, last = messages
+    content = last["content"]
+    if isinstance(content, str):
+        blocks = [{"type": "text", "text": content}]
+    else:  # a list of blocks: dicts (tool results) or SDK objects (Claude's replies)
+        blocks = [b if isinstance(b, dict) else b.model_dump(exclude_none=True) for b in content]
+    blocks[-1] = {**blocks[-1], "cache_control": CACHE}
+    return [*earlier, {**last, "content": blocks}]

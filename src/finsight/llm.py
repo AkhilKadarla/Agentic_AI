@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import anthropic
 
-from finsight.config import MODEL
+from finsight.providers import make_client, provider_options
 
 SYSTEM_PROMPT = """You are FinSight, a financial research analyst assistant.
 Explain financial concepts, companies, and filings clearly and accurately.
@@ -29,14 +29,10 @@ class Answer:
 
 def _create(client: anthropic.Anthropic, messages: list, **kwargs):
     return client.beta.messages.create(
-        model=MODEL,
         max_tokens=16000,
         system=SYSTEM_PROMPT,
         messages=messages,
-        # If a safety classifier declines the request, the API retries it on a
-        # fallback model automatically instead of just stopping.
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
+        **provider_options(),  # model + provider-specific settings (see providers.py)
         **kwargs,
     )
 
@@ -50,7 +46,7 @@ def _text_of(response) -> str:
 
 def ask(question: str, client: anthropic.Anthropic | None = None) -> Answer:
     """Send one question to Claude and return its answer plus token usage."""
-    client = client or anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+    client = client or make_client()  # Anthropic API or Bedrock, per FINSIGHT_PROVIDER
     response = _create(client, [{"role": "user", "content": question}])
     return Answer(
         text=_text_of(response),

@@ -14,7 +14,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
-- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Knowledge Base (RAG) over 10-Ks, Guardrails
+- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails, Knowledge Base (RAG) over 10-Ks
 - [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
@@ -34,6 +34,27 @@ uv run finsight ui       # web app at http://localhost:8501
 uv run pre-commit install   # one-time: enable git commit hooks
 ```
 
+## Running on Amazon Bedrock
+
+FinSight runs on the Anthropic API by default. To use Claude on Amazon Bedrock instead:
+
+```bash
+aws configure sso                      # one-time: create the "finsight" SSO profile
+aws sso login --profile finsight       # each day: short-lived credentials, no keys
+```
+
+Then set in `.env`:
+
+```bash
+FINSIGHT_PROVIDER=bedrock
+AWS_PROFILE=finsight
+AWS_REGION=us-east-1
+FINSIGHT_BEDROCK_MODEL=us.anthropic.claude-sonnet-4-6   # "us." = US-only processing
+```
+
+Everything else (chat, notes, UI) works the same. Differences are isolated in
+`src/finsight/providers.py`.
+
 ## Development checks
 
 ```bash
@@ -49,6 +70,7 @@ uv run pre-commit run --all-files   # run every commit hook
 src/finsight/   # application code
   cli.py        # command-line interface
   agent.py      # research agent: loop, memory, streaming events
+  providers.py  # Anthropic API vs Amazon Bedrock (client + request settings)
   llm.py        # simplest single Claude call (ask)
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)

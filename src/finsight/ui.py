@@ -10,10 +10,11 @@ import json
 import anthropic
 import streamlit as st
 
+from finsight import config
 from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult
 from finsight.charts import chart_rows, metric_chart
-from finsight.config import MODEL
 from finsight.notes import ResearchNote, format_value, render_markdown, save_note
+from finsight.providers import AWS_CREDENTIAL_ERRORS, AWS_LOGIN_HINT, describe
 
 EXAMPLES = [
     "How has NVIDIA's revenue and net income changed over the last 3 years?",
@@ -73,6 +74,9 @@ def run_agent(prompt: str) -> None:
                 status.update(label=f"Used {len(tools)} data lookups", state="complete")
         except anthropic.APIError as e:
             text += f"\n\n**Error from the Claude API:** {e.message}"
+            answer_box.markdown(text)
+        except AWS_CREDENTIAL_ERRORS:
+            text += f"\n\n**{AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)}**"
             answer_box.markdown(text)
     st.session_state.chat.append(
         {"role": "assistant", "text": text, "tools": [tuple(t) for t in tools]}
@@ -141,6 +145,8 @@ def sidebar() -> None:
                     save_note(note)
                 except (ValueError, anthropic.APIError) as e:
                     st.error(str(e))
+                except AWS_CREDENTIAL_ERRORS:
+                    st.error(AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE))
         if st.button("🗑️ New conversation", width="stretch"):
             agent.reset()
             st.session_state.chat = []
@@ -152,7 +158,7 @@ def sidebar() -> None:
         cost = usage.cost_usd()
         st.metric("Session cost (est.)", f"${cost:.3f}" if cost is not None else "n/a")
         st.caption(
-            f"Model: `{MODEL}`  \n"
+            f"Provider / model: `{describe()}`  \n"
             f"Input: {usage.input_tokens:,} new · {usage.cache_write_tokens:,} cache-write · "
             f"{usage.cache_read_tokens:,} cache-read  \n"
             f"Output: {usage.output_tokens:,}"
