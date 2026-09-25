@@ -8,7 +8,16 @@ from pathlib import Path
 import anthropic
 
 from finsight import __version__, config
-from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult, Usage
+from finsight.agent import (
+    Done,
+    GuardrailBlocked,
+    GuardrailReport,
+    ResearchAgent,
+    TextDelta,
+    ToolCall,
+    ToolResult,
+    Usage,
+)
 from finsight.llm import ask
 from finsight.notes import render_markdown, save_note
 from finsight.providers import AWS_CREDENTIAL_ERRORS, AWS_LOGIN_HINT, describe
@@ -136,8 +145,33 @@ def print_events(events) -> None:
             case ToolResult(is_error=is_error):
                 print("  [error]" if is_error else "  [ok]", end="", flush=True)
                 after_tools = True
+            case GuardrailBlocked(message, reasons):
+                print(f"[guardrail blocked: {', '.join(reasons) or 'policy'}] {message}", end="")
+            case GuardrailReport():
+                print(f"\n\n{describe_report(event)}", end="")
             case Done(usage=usage):
                 print(f"\n\n[{format_usage(usage)}]")
+
+
+def describe_report(report: GuardrailReport) -> str:
+    """One terminal line (plus flagged paragraphs) for the guardrail's answer review."""
+    if report.error:
+        return f"[guardrail] UNVERIFIED - do not rely on this answer. {report.error}"
+    if report.output and report.output.blocked:
+        reasons = ", ".join(report.output.reasons) or "policy"
+        return (
+            f"[guardrail] FLAGGED ({reasons}) - disregard the answer above. {report.output.message}"
+        )
+    grounding = report.grounding
+    if grounding and grounding.flagged:
+        lines = [
+            f"[guardrail] {len(grounding.flagged)} of {grounding.checked} paragraphs not directly "
+            "supported by the fetched data (often calculations) - verify:"
+        ]
+        lines += [f"  - ({p.grounding:.2f}) {p.text[:100]}..." for p in grounding.flagged]
+        return "\n".join(lines)
+    checked = f", {grounding.checked} paragraphs grounded" if grounding else ""
+    return f"[guardrail] passed{checked}"
 
 
 def format_usage(usage: Usage) -> str:
