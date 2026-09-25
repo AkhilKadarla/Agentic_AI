@@ -1,6 +1,9 @@
 """Command-line interface: `uv run finsight <command>`."""
 
 import argparse
+import subprocess
+import sys
+from pathlib import Path
 
 import anthropic
 
@@ -31,6 +34,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     note_cmd.add_argument("question", help='e.g. "Assess Apple\'s financial health"')
     commands.add_parser("chat", help="interactive research chat with follow-up questions")
+    commands.add_parser("ui", help="open the FinSight web app in your browser")
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -38,7 +42,12 @@ def main(argv: list[str] | None = None) -> None:
         print('Try: uv run finsight ask "What is EBITDA?"')
         print('     uv run finsight research "How has NVIDIA\'s revenue grown?"')
         print("     uv run finsight chat")
+        print("     uv run finsight ui")
         return
+    if args.command == "ui":
+        app = Path(__file__).with_name("ui.py")
+        print("Starting FinSight - open http://localhost:8501 (Ctrl+C to stop)")
+        raise SystemExit(subprocess.call([sys.executable, "-m", "streamlit", "run", str(app)]))
 
     try:
         if args.command == "ask":
@@ -88,11 +97,17 @@ def chat(agent: ResearchAgent | None = None, read=input) -> None:
 
 
 def make_note(agent: ResearchAgent) -> None:
-    print("Writing research note...")
+    # This is one large, non-streamed call, so there is no progress output until it
+    # finishes (can take a while for a long conversation) - print a note so it's not
+    # mistaken for a hang.
+    print("Writing research note... (this can take a minute, no streaming for structured output)")
     try:
         note, usage = agent.write_note()
     except ValueError as e:
         print(f"({e})\n")
+        return
+    except anthropic.APIStatusError as e:
+        print(f"(Could not write the note: {e})\n")
         return
     path = save_note(note)
     print(f"\n{render_markdown(note)}\n")

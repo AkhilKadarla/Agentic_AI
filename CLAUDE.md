@@ -13,6 +13,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - `uv run pytest` - run tests (with coverage)
 - `uv run ruff check --fix . && uv run ruff format .` - lint and format
 - `uv run pre-commit run --all-files` - run all commit hooks
+- `uv run finsight ui` - Streamlit app on localhost:8501 (config in .streamlit/config.toml)
 - `uv add <pkg>` / `uv add --dev <pkg>` - add a dependency (never edit versions by hand)
 
 ## Conventions
@@ -25,6 +26,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   candidate XBRL concepts in `sec.METRICS`
 - Structured output: `ResearchNote` (notes.py) via `client.beta.messages.parse(output_format=...)`;
   notes save to reports/ (git-ignored)
+- UI: ui.py renders ResearchAgent events; state in st.session_state; tests use Streamlit
+  AppTest with an injected fake-backed agent (tests/test_ui.py)
 - Model: `claude-opus-5` by default (override with FINSIGHT_MODEL); SDK: `anthropic`
 - Tests must never call the real API or network - inject a fake client (tests/test_llm.py)
   or an httpx.MockTransport (tests/test_sec.py)
