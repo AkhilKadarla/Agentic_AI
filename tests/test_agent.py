@@ -188,19 +188,49 @@ def parse_response(parsed_output, stop_reason="end_turn"):
     )
 
 
+class NoteStream(FakeStream):
+    """A streamed structured-output reply: get_final_message() returns the parsed note,
+    or raises the error Pydantic would raise for truncated JSON."""
+
+    def __init__(self, parsed_output=None, stop_reason="end_turn", error=None):
+        self.response = parse_response(parsed_output, stop_reason)
+        self.error = error
+
+    def __iter__(self):
+        return iter([])
+
+    def get_final_message(self):
+        if self.error:
+            raise self.error
+        return self.response
+
+
+def truncated_json_error():
+    from pydantic import ValidationError
+
+    from finsight.notes import ResearchNote
+
+    try:
+        ResearchNote.model_validate_json('{"title": "Walmart vs. Ta')
+    except ValidationError as e:
+        return e
+
+
 def test_write_note_requests_structured_output_without_changing_memory() -> None:
     from tests.test_notes import sample_note
 
-    client = scripted_client(FakeStream([text_block("Apple grew ...")], "end_turn"))
-    client.beta.messages.parse.return_value = parse_response(sample_note())
+    client = scripted_client(
+        FakeStream([text_block("Apple grew ...")], "end_turn"), NoteStream(sample_note())
+    )
     agent = ResearchAgent(client=client)
     list(agent.send("Apple revenue?"))
 
     note, usage = agent.write_note()
 
-    request = client.beta.messages.parse.call_args.kwargs
+    request = client.beta.messages.stream.call_args.kwargs
     assert request["output_format"].__name__ == "ResearchNote"
     assert request["tool_choice"] == {"type": "none"}
+    assert request["max_tokens"] == 64000  # thinking + JSON share this budget
     assert "research note" in request["messages"][-1]["content"]
     assert note.tickers == ["AAPL"]
     assert usage.cache_write_tokens == 2000
@@ -213,8 +243,9 @@ def test_write_note_with_empty_conversation_raises() -> None:
 
 
 def test_write_note_without_parsed_output_raises() -> None:
-    client = scripted_client(FakeStream([text_block("hi")], "end_turn"))
-    client.beta.messages.parse.return_value = parse_response(None, stop_reason="refusal")
+    client = scripted_client(
+        FakeStream([text_block("hi")], "end_turn"), NoteStream(None, stop_reason="refusal")
+    )
     agent = ResearchAgent(client=client)
     list(agent.send("q"))
 
@@ -222,12 +253,36 @@ def test_write_note_without_parsed_output_raises() -> None:
         agent.write_note()
 
 
+def test_write_note_hitting_max_tokens_says_so() -> None:
+    client = scripted_client(
+        FakeStream([text_block("hi")], "end_turn"), NoteStream(None, stop_reason="max_tokens")
+    )
+    agent = ResearchAgent(client=client)
+    list(agent.send("q"))
+
+    with pytest.raises(ValueError, match="output limit"):
+        agent.write_note()
+
+
+def test_write_note_with_truncated_json_gives_a_clear_error() -> None:
+    # Regression: the Bedrock run showed Pydantic's raw "EOF while parsing" error.
+    client = scripted_client(
+        FakeStream([text_block("hi")], "end_turn"), NoteStream(error=truncated_json_error())
+    )
+    agent = ResearchAgent(client=client)
+    list(agent.send("q"))
+
+    with pytest.raises(ValueError, match="incomplete or malformed"):
+        agent.write_note()
+
+
 def test_chat_note_command_saves_note(monkeypatch, tmp_path, capsys) -> None:
     from tests.test_notes import sample_note
 
     monkeypatch.chdir(tmp_path)  # save_note writes to ./reports
-    client = scripted_client(FakeStream([text_block("Apple grew ...")], "end_turn"))
-    client.beta.messages.parse.return_value = parse_response(sample_note())
+    client = scripted_client(
+        FakeStream([text_block("Apple grew ...")], "end_turn"), NoteStream(sample_note())
+    )
     inputs = iter(["Apple revenue?", "/note", "/exit"])
 
     chat(ResearchAgent(client=client), read=lambda prompt: next(inputs))

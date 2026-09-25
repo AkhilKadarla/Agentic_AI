@@ -24,7 +24,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Agent: `ResearchAgent` in agent.py (loop capped by MAX_TURNS, memory in .messages,
   yields TextDelta/ToolCall/ToolResult/Done events; UIs render events, never print in agent); SEC financial metrics map to
   candidate XBRL concepts in `sec.METRICS`
-- Structured output: `ResearchNote` (notes.py) via `client.beta.messages.parse(output_format=...)`;
+- Structured output: `ResearchNote` (notes.py) via streamed `client.beta.messages.stream(output_format=...)`
+  with max_tokens=64000 (thinking + JSON share the budget);
   notes save to reports/ (git-ignored)
 - UI: ui.py renders ResearchAgent events; state in st.session_state; tests use Streamlit
   AppTest with an injected fake-backed agent (tests/test_ui.py)

@@ -47,7 +47,9 @@ class ResearchNote(BaseModel):
 NOTE_INSTRUCTIONS = """Write a research note from the conversation so far.
 Use only figures that appear in the tool results above; do not add numbers from memory.
 Mark calculated figures (growth rates, margins, free cash flow) as derived.
-If the data does not support a conclusion, say so in risks and lower the confidence."""
+If the data does not support a conclusion, say so in risks and lower the confidence.
+Keep it focused: at most 12 key metrics (the figures your conclusions depend on) and
+at most 6 findings."""
 
 
 def format_value(value: float, unit: str) -> str:

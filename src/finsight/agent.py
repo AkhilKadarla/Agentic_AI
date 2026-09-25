@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import anthropic
+from pydantic import ValidationError
 
 from finsight.config import PRICING
 from finsight.llm import SYSTEM_PROMPT
@@ -163,15 +164,27 @@ class ResearchAgent:
         if not self.messages:
             raise ValueError("Nothing to summarize yet - ask a research question first.")
         note_request = {"role": "user", "content": NOTE_INSTRUCTIONS}
-        response = self.client.beta.messages.parse(
+        # Streamed, with a large max_tokens: thinking tokens and the note's JSON share
+        # one output budget, and a long comparison can need a lot of both. (With 16k,
+        # Sonnet 4.6 thought for ~15k tokens and the JSON was cut off mid-string.)
+        with self.client.beta.messages.stream(
             **self._request_options([*self.messages, note_request]),
-            max_tokens=16000,
+            max_tokens=64000,
             tool_choice={"type": "none"},  # write the note now; no more data fetching
             output_format=ResearchNote,  # the reply must match this Pydantic model
-        )
+        ) as stream:
+            try:
+                response = stream.get_final_message()  # parses + validates the JSON
+            except ValidationError as e:
+                raise ValueError(
+                    "The note came back incomplete or malformed. Try again, or narrow the "
+                    "question (fewer companies or metrics)."
+                ) from e
         usage = Usage()
         usage.add(response.usage)
         self.total_usage.add(response.usage)
+        if response.stop_reason == "max_tokens":
+            raise ValueError("The note hit the output limit before it was finished.")
         if response.parsed_output is None:  # e.g. a refusal, so there is no JSON to parse
             raise ValueError(f"Could not produce a note (stop reason: {response.stop_reason})")
         return response.parsed_output, usage
