@@ -38,4 +38,9 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   or an httpx.MockTransport (tests/test_sec.py)
 - New tools: add the definition to TOOLS and the implementation to run_tool() in tools.py;
   return errors to Claude as (message, True) instead of raising
+- Guardrail: guardrail.py via ApplyGuardrail (provider-independent); input check before
+  Claude, output + per-paragraph grounding after ("stream, then flag"); fail closed on
+  errors; version must be pinned (FINSIGHT_GUARDRAIL_VERSION). Grounding sources are
+  readable text with written dates, tables checked as sentences (measured: big score gains).
+  Run scripts/guardrail_suite.py before publishing a guardrail version
 - Never present outputs as financial advice
