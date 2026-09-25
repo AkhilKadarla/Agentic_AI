@@ -166,24 +166,30 @@ def main() -> None:
 
     chat_tab, note_tab = st.tabs(["💬 Research chat", "📝 Research note"])
     with chat_tab:
-        if not st.session_state.chat:
-            st.markdown("Ask about any US-listed company. For example:")
-            for example in EXAMPLES:
-                st.markdown(f"- *{example}*")
-        for message in st.session_state.chat:
-            show_message(message)
+        # A fixed-height, independently scrolling box: the tabs and chat input stay put
+        # while only the message history inside it scrolls.
+        messages = st.container(height=520)
+        with messages:
+            if not st.session_state.chat:
+                st.markdown("Ask about any US-listed company. For example:")
+                for example in EXAMPLES:
+                    st.markdown(f"- *{example}*")
+            for message in st.session_state.chat:
+                show_message(message)
+
+        # Nested inside chat_tab so it's only visible/usable on this tab, not floating
+        # over the whole page - answers always appear where the question was asked.
+        if prompt := st.chat_input("Ask a research question..."):
+            st.session_state.chat.append({"role": "user", "text": prompt})
+            with messages:
+                show_message(st.session_state.chat[-1])
+                run_agent(prompt)
+            st.rerun()  # refresh the sidebar's cost and token counts
     with note_tab:
         if st.session_state.note:
             show_note(st.session_state.note)
         else:
             st.info("Research a question in the chat, then click **Generate research note**.")
-
-    if prompt := st.chat_input("Ask a research question..."):
-        st.session_state.chat.append({"role": "user", "text": prompt})
-        with chat_tab:
-            show_message(st.session_state.chat[-1])
-            run_agent(prompt)
-        st.rerun()  # refresh the sidebar's cost and token counts
 
 
 main()

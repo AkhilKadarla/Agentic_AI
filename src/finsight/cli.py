@@ -97,11 +97,17 @@ def chat(agent: ResearchAgent | None = None, read=input) -> None:
 
 
 def make_note(agent: ResearchAgent) -> None:
-    print("Writing research note...")
+    # This is one large, non-streamed call, so there is no progress output until it
+    # finishes (can take a while for a long conversation) - print a note so it's not
+    # mistaken for a hang.
+    print("Writing research note... (this can take a minute, no streaming for structured output)")
     try:
         note, usage = agent.write_note()
     except ValueError as e:
         print(f"({e})\n")
+        return
+    except anthropic.APIStatusError as e:
+        print(f"(Could not write the note: {e})\n")
         return
     path = save_note(note)
     print(f"\n{render_markdown(note)}\n")
