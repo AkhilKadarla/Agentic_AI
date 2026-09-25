@@ -7,10 +7,11 @@ from pathlib import Path
 
 import anthropic
 
-from finsight import __version__
+from finsight import __version__, config
 from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult, Usage
 from finsight.llm import ask
 from finsight.notes import render_markdown, save_note
+from finsight.providers import AWS_CREDENTIAL_ERRORS, AWS_LOGIN_HINT, describe
 
 CHAT_HELP = (
     "Commands: /note (save a research note), /reset (forget conversation), "
@@ -67,13 +68,15 @@ def main(argv: list[str] | None = None) -> None:
     except anthropic.RateLimitError:
         raise SystemExit("Rate limited by the API - wait a minute and try again.") from None
     except anthropic.APIConnectionError:
-        raise SystemExit("Could not reach the Anthropic API - check your connection.") from None
+        raise SystemExit("Could not reach the Claude API - check your connection.") from None
+    except AWS_CREDENTIAL_ERRORS:
+        raise SystemExit(AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)) from None
 
 
 def chat(agent: ResearchAgent | None = None, read=input) -> None:
     """A read-eval-print loop: the same agent (and its memory) answers every message."""
     agent = agent or ResearchAgent()
-    print(f"FinSight chat - ask about any US-listed company. {CHAT_HELP}\n")
+    print(f"FinSight chat [{describe()}] - ask about any US-listed company. {CHAT_HELP}\n")
     while True:
         try:
             message = read("you> ").strip()
@@ -108,6 +111,9 @@ def make_note(agent: ResearchAgent) -> None:
         return
     except anthropic.APIStatusError as e:
         print(f"(Could not write the note: {e})\n")
+        return
+    except AWS_CREDENTIAL_ERRORS:
+        print(f"({AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)})\n")
         return
     path = save_note(note)
     print(f"\n{render_markdown(note)}\n")
