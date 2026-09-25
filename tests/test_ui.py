@@ -8,7 +8,13 @@ from streamlit.testing.v1 import AppTest
 
 from finsight.agent import ResearchAgent, Usage
 from finsight.charts import chart_rows, display_unit, metric_chart
-from tests.test_agent import FakeStream, parse_response, scripted_client, text_block, tool_use_block
+from tests.test_agent import (
+    FakeStream,
+    NoteStream,
+    scripted_client,
+    text_block,
+    tool_use_block,
+)
 from tests.test_notes import sample_note
 
 APP = str(Path(__file__).parents[1] / "src" / "finsight" / "ui.py")
@@ -49,8 +55,9 @@ def test_chat_message_streams_answer_and_records_tool_calls() -> None:
 
 def test_generate_note_button_renders_note(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)  # the button also saves the note to ./reports
-    client = scripted_client(FakeStream([text_block("Apple grew ...")], "end_turn"))
-    client.beta.messages.parse.return_value = parse_response(sample_note())
+    client = scripted_client(
+        FakeStream([text_block("Apple grew ...")], "end_turn"), NoteStream(sample_note())
+    )
     agent = ResearchAgent(client=client)
     app = app_with(agent)
     app.chat_input[0].set_value("Apple revenue?").run()
