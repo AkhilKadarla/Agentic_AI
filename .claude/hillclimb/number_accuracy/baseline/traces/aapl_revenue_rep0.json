@@ -1,0 +1,24 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was Apple's revenue in its most recent fiscal year?"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"AAPL\",\n  \"metric\": \"revenue\",\n  \"years\": 1\n}",
+  "thinking": "The user wants to know Apple's revenue in its most recent fiscal year. Let me fetch that data."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"Apple Inc.\", \"ticker\": \"AAPL\", \"metric\": \"revenue\", \"xbrl_concept\": \"RevenueFromContractWithCustomerExcludingAssessedTax\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2025-09-27\", \"value\": 416161000000, \"filed\": \"2025-10-31\"}]}"
+ },
+ {
+  "role": "assistant",
+  "content": "Based on Apple's most recent **10-K filing** (filed on **October 31, 2025**), here are the results:\n\n| Fiscal Year End | Revenue |\n|---|---|\n| September 27, 2025 | **$416.16 billion** |\n\nApple reported **$416.16 billion in total revenue** for its fiscal year ending September 27, 2025, making it one of the largest revenue-generating companies in the world.\n\n> \ud83d\udccc *This figure comes directly from Apple's XBRL-structured 10-K filing with the SEC. It reflects net revenue as reported \u2014 no adjustments have been made.*\n\nWould you like me to dig deeper \u2014 for example, comparing this to prior years, looking at profitability metrics, or analyzing trends?"
+ }
+]

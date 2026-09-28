@@ -87,10 +87,16 @@ class Usage:
 
 @dataclass
 class Done:
-    """The final event of a send(): the complete answer and this message's token usage."""
+    """The final event of a send(): the complete answer and this message's token usage.
+
+    `model` is the model that actually answered (as reported by the API) and `stop_reason`
+    why it stopped; evals use them to catch model substitutions and cut-off answers.
+    """
 
     text: str
     usage: Usage
+    model: str = ""
+    stop_reason: str = ""
 
 
 @dataclass
@@ -181,7 +187,7 @@ class ResearchAgent:
                 answer = self._final_text(response)
                 if self.guardrail:
                     yield self._review(answer, user_message)
-                yield Done(answer, usage)
+                yield Done(answer, usage, response.model, response.stop_reason)
                 return
 
             tool_results = []
@@ -208,6 +214,7 @@ class ResearchAgent:
             f"Stopped after {self.max_turns} turns without a final answer (safety limit). "
             "Try a narrower question.",
             usage,
+            stop_reason="max_turns",
         )
 
     def _review(self, answer: str, question: str) -> GuardrailReport:

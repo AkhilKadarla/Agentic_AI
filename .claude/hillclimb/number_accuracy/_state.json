@@ -1,0 +1,31 @@
+{
+  "flow": "number_accuracy",
+  "metrics": [
+    {
+      "id": "correct",
+      "label": "Correct",
+      "kind": "binary"
+    },
+    {
+      "id": "from_data",
+      "label": "From data",
+      "kind": "binary"
+    }
+  ],
+  "perf_fields": [
+    "latency_s",
+    "tool_calls",
+    "cost_usd"
+  ],
+  "harness_paths": [
+    "evals/number_accuracy/run_eval.py",
+    "evals/number_accuracy/grading.py",
+    "evals/number_accuracy/cases.jsonl",
+    "src/finsight/agent.py",
+    "src/finsight/tools.py",
+    "src/finsight/llm.py",
+    "src/finsight/sec.py",
+    "src/finsight/providers.py",
+    "src/finsight/config.py"
+  ]
+}
