@@ -117,18 +117,24 @@ def sync(agent=None, poll_seconds: float = 10, timeout_seconds: float = 1800) ->
     return job.get("statistics", {})
 
 
-def search(ticker: str, query: str, limit: int = 5, runtime=None) -> list[Passage]:
-    """The `limit` chunks of a company's filings closest in meaning to `query`."""
+def search(
+    ticker: str, query: str, section: str | None = None, limit: int = 5, runtime=None
+) -> list[Passage]:
+    """The `limit` chunks of a company's filings closest in meaning to `query`,
+    optionally only from one section ("risk_factors" or "mdna")."""
     runtime = runtime or _session().client("bedrock-agent-runtime")
+    # The labels at work: only search this company's chunks (and section, if given).
+    ticker_filter = {"equals": {"key": "ticker", "value": ticker.upper()}}
+    label_filter = (
+        {"andAll": [ticker_filter, {"equals": {"key": "section", "value": section}}]}
+        if section
+        else ticker_filter
+    )
     response = runtime.retrieve(
         knowledgeBaseId=config.KB_ID,
         retrievalQuery={"text": query},
         retrievalConfiguration={
-            "vectorSearchConfiguration": {
-                "numberOfResults": limit,
-                # The labels at work: only search this company's chunks.
-                "filter": {"equals": {"key": "ticker", "value": ticker.upper()}},
-            }
+            "vectorSearchConfiguration": {"numberOfResults": limit, "filter": label_filter}
         },
     )
     passages = []

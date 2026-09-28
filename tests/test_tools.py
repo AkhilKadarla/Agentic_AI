@@ -62,3 +62,68 @@ def test_unknown_tool_is_reported_as_error() -> None:
     _, is_error = run_tool("delete_everything", {}, http=make_http())
 
     assert is_error
+
+
+# ---------- search_filings (10-K text via the Knowledge Base) ----------
+
+
+def passage(**overrides):
+    from finsight.knowledge_base import Passage
+
+    fields = {
+        "text": "We rely on single-source suppliers for battery cells.",
+        "score": 0.734,
+        "ticker": "TSLA",
+        "section": "risk_factors",
+        "fiscal_year_end": "2025-12-31",
+        "source_url": "https://sec.gov/tsla",
+    }
+    return Passage(**(fields | overrides))
+
+
+def test_search_filings_is_offered_only_with_a_knowledge_base(monkeypatch) -> None:
+    from finsight import config
+    from finsight.tools import available_tools
+
+    assert "search_filings" not in [t["name"] for t in available_tools()]
+    monkeypatch.setattr(config, "KB_ID", "KB123")
+    assert "search_filings" in [t["name"] for t in available_tools()]
+
+
+def test_search_filings_returns_passages(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        "finsight.knowledge_base.search",
+        lambda ticker, query, section=None: calls.append((ticker, query, section)) or [passage()],
+    )
+
+    result, is_error = run_tool(
+        "search_filings", {"ticker": "tsla", "query": "supplier risk", "section": "risk_factors"}
+    )
+
+    assert not is_error
+    assert calls == [("TSLA", "supplier risk", "risk_factors")]
+    [p] = json.loads(result)["passages"]
+    assert p["relevance"] == 0.73 and p["fiscal_year_end"] == "2025-12-31"
+
+
+def test_search_filings_for_unindexed_company_says_how_to_index(monkeypatch) -> None:
+    monkeypatch.setattr("finsight.knowledge_base.search", lambda *a, **k: [])
+
+    result, is_error = run_tool("search_filings", {"ticker": "KO", "query": "risks"})
+
+    assert is_error
+    assert "finsight index KO" in result
+
+
+def test_search_filings_errors_are_returned_not_raised(monkeypatch) -> None:
+    from finsight.knowledge_base import KnowledgeBaseError
+
+    def fail(*args, **kwargs):
+        raise KnowledgeBaseError("Set FINSIGHT_KB_ID in .env")
+
+    monkeypatch.setattr("finsight.knowledge_base.search", fail)
+
+    result, is_error = run_tool("search_filings", {"ticker": "TSLA", "query": "risks"})
+
+    assert is_error and "FINSIGHT_KB_ID" in result

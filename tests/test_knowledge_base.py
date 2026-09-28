@@ -130,3 +130,18 @@ def test_missing_settings_are_named(monkeypatch) -> None:
 
     with pytest.raises(kb.KnowledgeBaseError, match="FINSIGHT_KB_ID"):
         kb.require_config()
+
+
+def test_search_can_be_limited_to_one_section() -> None:
+    runtime = MagicMock()
+    runtime.retrieve.return_value = {"retrievalResults": []}
+
+    kb.search("TSLA", "why did revenue fall", section="mdna", runtime=runtime)
+
+    search_config = runtime.retrieve.call_args.kwargs["retrievalConfiguration"]
+    assert search_config["vectorSearchConfiguration"]["filter"] == {
+        "andAll": [
+            {"equals": {"key": "ticker", "value": "TSLA"}},
+            {"equals": {"key": "section", "value": "mdna"}},
+        ]
+    }
