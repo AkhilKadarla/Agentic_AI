@@ -1,0 +1,10 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:us-east-1:ACCOUNT_ID:log-group:/finsight/bedrock-invocations:log-stream:aws/bedrock/modelinvocations"
+    }
+  ]
+}

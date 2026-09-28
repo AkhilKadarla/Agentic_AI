@@ -15,7 +15,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
 - [x] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Guardrails, Knowledge Base (RAG) over 10-K text
-- [ ] **Phase 7 - Evals & observability:** number-accuracy eval ✅ (baseline 100%), OpenTelemetry tracing ✅
+- [x] **Phase 7 - Evals & observability:** number-accuracy eval, OpenTelemetry tracing, Bedrock invocation logging
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
 
@@ -116,6 +116,9 @@ written to `logs/traces/<date>.jsonl` (git-ignored, deleted after 30 days).
 uv run finsight traces              # recent questions: time, cost, tools, outcome
 uv run finsight traces 719df4fc     # one question, step by step
 ```
+
+Independently, AWS records every Bedrock model call (who, when, model, tokens, request and
+response) in CloudWatch Logs: `/finsight/bedrock-invocations`, 30-day retention. See `infra/iam/`.
 
 ## Development checks
 
