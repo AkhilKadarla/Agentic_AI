@@ -16,7 +16,10 @@
         "s3:GetEncryptionConfiguration",
         "s3:PutEncryptionConfiguration"
       ],
-      "Resource": ["arn:aws:s3:::finsight-*", "arn:aws:s3:::finsight-*/*"]
+      "Resource": [
+        "arn:aws:s3:::finsight-*",
+        "arn:aws:s3:::finsight-*/*"
+      ]
     },
     {
       "Sid": "FinSightVectorBuckets",
@@ -28,28 +31,34 @@
       ]
     },
     {
-      "Sid": "KnowledgeBaseServiceRole",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:GetRole",
-        "iam:PassRole",
-        "iam:CreatePolicy",
-        "iam:GetPolicy",
-        "iam:GetPolicyVersion",
-        "iam:AttachRolePolicy",
-        "iam:ListAttachedRolePolicies"
-      ],
-      "Resource": [
-        "arn:aws:iam::*:role/service-role/AmazonBedrockExecutionRoleForKnowledgeBase*",
-        "arn:aws:iam::*:policy/service-role/AmazonBedrock*"
-      ]
-    },
-    {
       "Sid": "ListingForTheConsole",
       "Effect": "Allow",
-      "Action": ["s3:ListAllMyBuckets", "s3vectors:ListVectorBuckets", "iam:ListRoles"],
+      "Action": [
+        "iam:ListRoles",
+        "logs:DescribeLogGroups",
+        "logs:GetQueryResults",
+        "s3:ListAllMyBuckets",
+        "s3vectors:ListVectorBuckets"
+      ],
       "Resource": "*"
+    },
+    {
+      "Sid": "FinSightLogGroups",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:StartQuery",
+        "logs:StopQuery"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:*:log-group:/finsight/*",
+        "arn:aws:logs:us-east-1:*:log-group:/finsight/*:log-stream:*"
+      ]
     }
   ]
 }
