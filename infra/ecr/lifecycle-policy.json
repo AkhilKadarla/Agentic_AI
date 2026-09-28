@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Keep the 20 most recent images (rollback targets); expire older ones",
+      "selection": {
+        "tagStatus": "any",
+        "countType": "imageCountMoreThan",
+        "countNumber": 20
+      },
+      "action": { "type": "expire" }
+    }
+  ]
+}
