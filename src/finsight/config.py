@@ -20,6 +20,13 @@ BEDROCK_MODEL = os.getenv("FINSIGHT_BEDROCK_MODEL", "us.anthropic.claude-sonnet-
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_PROFILE = os.getenv("AWS_PROFILE")  # e.g. "finsight" (SSO); None = default AWS chain
 
+# Amazon Bedrock Guardrail (optional). Checks questions and answers against the compliance
+# policy via the ApplyGuardrail API, whichever provider runs Claude. Unset = no guardrail.
+# Pin a published version number (e.g. "3"); "DRAFT" is the editable working copy and is
+# only for testing policy changes. No default: the version must be a deliberate choice.
+GUARDRAIL_ID = os.getenv("FINSIGHT_GUARDRAIL_ID")
+GUARDRAIL_VERSION = os.getenv("FINSIGHT_GUARDRAIL_VERSION")
+
 # USD per million tokens (Anthropic list prices; Bedrock on-demand prices are similar but
 # check the AWS pricing page). Cache writes cost 1.25x input, cache reads 0.1x input.
 PRICING = {

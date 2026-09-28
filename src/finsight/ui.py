@@ -11,7 +11,15 @@ import anthropic
 import streamlit as st
 
 from finsight import config
-from finsight.agent import Done, ResearchAgent, TextDelta, ToolCall, ToolResult
+from finsight.agent import (
+    Done,
+    GuardrailBlocked,
+    GuardrailReport,
+    ResearchAgent,
+    TextDelta,
+    ToolCall,
+    ToolResult,
+)
 from finsight.charts import chart_rows, metric_chart
 from finsight.notes import ResearchNote, format_value, render_markdown, save_note
 from finsight.providers import AWS_CREDENTIAL_ERRORS, AWS_LOGIN_HINT, describe
@@ -35,6 +43,52 @@ def tool_label(name: str, tool_input: dict) -> str:
     return f"`{name}({args})`"
 
 
+def guard_summary(event: GuardrailBlocked | GuardrailReport) -> dict:
+    """Condense a guardrail event into what the chat displays (and keeps in history)."""
+    if isinstance(event, GuardrailBlocked):
+        return {"status": "blocked", "message": event.message, "reasons": event.reasons}
+    if event.error:
+        return {"status": "unverified", "message": event.error}
+    if event.output and event.output.blocked:
+        output = event.output
+        return {"status": "retracted", "message": output.message, "reasons": output.reasons}
+    grounding = event.grounding
+    if grounding and grounding.flagged:
+        return {
+            "status": "flagged",
+            "checked": grounding.checked,
+            "flagged": [(p.text, p.grounding) for p in grounding.flagged],
+        }
+    return {"status": "passed", "checked": grounding.checked if grounding else 0}
+
+
+def show_guard(guard: dict) -> None:
+    status = guard["status"]
+    reasons = ", ".join(guard.get("reasons", [])) or "policy"
+    if status == "blocked":
+        st.warning(f"🛡️ Blocked by the compliance guardrail ({reasons}). Claude was not called.")
+    elif status == "retracted":
+        st.warning(f"🛡️ The guardrail flagged this answer ({reasons}), so it was replaced.")
+    elif status == "unverified":
+        st.error(f"🛡️ {guard['message']}")
+    elif status == "flagged":
+        flagged = guard["flagged"]
+        with st.expander(
+            f"⚠️ {len(flagged)} of {guard['checked']} paragraphs not directly supported by the data"
+        ):
+            st.caption(
+                "Often a calculation (growth, margins) - the check can't verify arithmetic - "
+                "or a claim not in the fetched SEC data. Verify these parts:"
+            )
+            for text, score in flagged:
+                snippet = text[:240] + ("…" if len(text) > 240 else "")
+                st.markdown(f"- *{snippet}* (grounding {score:.2f})")
+    elif guard.get("checked"):
+        st.caption(f"🛡️ Guardrail passed · {guard['checked']} paragraphs grounded in SEC data")
+    else:
+        st.caption("🛡️ Guardrail passed")
+
+
 def show_message(message: dict) -> None:
     with st.chat_message(message["role"]):
         if message.get("tools"):
@@ -42,6 +96,8 @@ def show_message(message: dict) -> None:
                 for label, is_error in message["tools"]:
                     st.markdown(f"{'⚠️' if is_error else '✅'} {label}")
         st.markdown(message["text"])
+        if message.get("guard"):
+            show_guard(message["guard"])
 
 
 def run_agent(prompt: str) -> None:
@@ -50,7 +106,7 @@ def run_agent(prompt: str) -> None:
     with st.chat_message("assistant"):
         tools_box = st.container()  # tool calls appear above the answer
         answer_box = st.empty()
-        status, text, tools, after_tools = None, "", [], False
+        status, text, tools, after_tools, guard = None, "", [], False, None
         try:
             for event in agent.send(prompt):
                 match event:
@@ -68,6 +124,12 @@ def run_agent(prompt: str) -> None:
                     case ToolResult(is_error=is_error):
                         tools[-1][1] = is_error
                         after_tools = True
+                    case GuardrailBlocked() | GuardrailReport():
+                        guard = guard_summary(event)
+                        if guard["status"] in ("blocked", "retracted"):
+                            text = guard["message"]  # the guardrail's text replaces the answer
+                        elif guard["status"] == "unverified":
+                            text = "*(Answer withheld: it could not be checked.)*"
                     case Done():
                         answer_box.markdown(text)
             if status is not None:
@@ -78,8 +140,10 @@ def run_agent(prompt: str) -> None:
         except AWS_CREDENTIAL_ERRORS:
             text += f"\n\n**{AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)}**"
             answer_box.markdown(text)
+        if guard:
+            show_guard(guard)
     st.session_state.chat.append(
-        {"role": "assistant", "text": text, "tools": [tuple(t) for t in tools]}
+        {"role": "assistant", "text": text, "tools": [tuple(t) for t in tools], "guard": guard}
     )
 
 

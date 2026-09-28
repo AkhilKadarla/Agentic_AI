@@ -14,3 +14,5 @@ def default_provider(monkeypatch):
     monkeypatch.setattr(config, "BEDROCK_MODEL", "us.anthropic.claude-sonnet-4-6")
     monkeypatch.setattr(config, "AWS_REGION", "us-east-1")
     monkeypatch.setattr(config, "AWS_PROFILE", None)
+    monkeypatch.setattr(config, "GUARDRAIL_ID", None)  # no guardrail unless a test adds one
+    monkeypatch.setattr(config, "GUARDRAIL_VERSION", None)

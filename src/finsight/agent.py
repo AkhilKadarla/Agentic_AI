@@ -11,7 +11,17 @@ from dataclasses import dataclass
 import anthropic
 from pydantic import ValidationError
 
+from finsight import config
 from finsight.config import PRICING
+from finsight.guardrail import (
+    FAIL_CLOSED_MESSAGE,
+    Grounding,
+    Guardrail,
+    GuardrailUnavailable,
+    Verdict,
+    make_guardrail,
+    readable_source,
+)
 from finsight.llm import SYSTEM_PROMPT
 from finsight.notes import NOTE_INSTRUCTIONS, ResearchNote
 from finsight.providers import (
@@ -83,7 +93,29 @@ class Done:
     usage: Usage
 
 
-Event = TextDelta | ToolCall | ToolResult | Done
+@dataclass
+class GuardrailBlocked:
+    """The guardrail stopped the question before it reached Claude."""
+
+    message: str
+    reasons: list[str]
+
+
+@dataclass
+class GuardrailReport:
+    """The guardrail's review of a finished answer ("stream, then flag").
+
+    output: topics / personal data / content filters on the whole answer
+    grounding: which paragraphs aren't directly supported by the fetched SEC data
+    error: set when the guardrail couldn't be reached (fail closed: don't trust the answer)
+    """
+
+    output: Verdict | None = None
+    grounding: Grounding | None = None
+    error: str | None = None
+
+
+Event = TextDelta | ToolCall | ToolResult | GuardrailBlocked | GuardrailReport | Done
 
 
 # ---------- The agent ----------
@@ -97,23 +129,41 @@ class ResearchAgent:
         client: anthropic.Anthropic | anthropic.AnthropicBedrock | None = None,
         tool_runner: Callable[[str, dict], tuple[str, bool]] = run_tool,
         max_turns: int = MAX_TURNS,
+        guardrail: Guardrail | None = None,
     ) -> None:
         self.client = client or make_client()  # Anthropic API or Bedrock, per .env
         self.tool_runner = tool_runner
         self.max_turns = max_turns
+        # Optional compliance guardrail (FINSIGHT_GUARDRAIL_ID in .env).
+        self.guardrail = guardrail or make_guardrail()
         # The memory: the full conversation, re-sent to Claude on every request
         # (the API itself is stateless).
         self.messages: list[dict] = []
+        # Every successful tool result in this conversation, as readable text: the
+        # evidence the guardrail's grounding check compares answers against.
+        self.sources: list[str] = []
         self.total_usage = Usage()
 
     def reset(self) -> None:
         """Forget the conversation and start fresh."""
         self.messages = []
+        self.sources = []
 
     def send(self, user_message: str) -> Iterator[Event]:
         """Send one user message and run the agent loop, yielding events as they happen."""
-        self.messages.append({"role": "user", "content": user_message})
         usage = Usage()
+        if self.guardrail:
+            try:
+                verdict = self.guardrail.check_input(user_message)
+            except GuardrailUnavailable:
+                verdict = Verdict(True, FAIL_CLOSED_MESSAGE.format(profile=config.AWS_PROFILE))
+            if verdict.blocked:
+                # Blocked questions never reach Claude and are not added to memory.
+                yield GuardrailBlocked(verdict.message, verdict.reasons)
+                yield Done(verdict.message, usage)
+                return
+
+        self.messages.append({"role": "user", "content": user_message})
 
         for _turn in range(self.max_turns):
             with self._stream() as stream:
@@ -128,7 +178,10 @@ class ResearchAgent:
             self.messages.append({"role": "assistant", "content": response.content})
 
             if response.stop_reason != "tool_use":
-                yield Done(self._final_text(response), usage)
+                answer = self._final_text(response)
+                if self.guardrail:
+                    yield self._review(answer, user_message)
+                yield Done(answer, usage)
                 return
 
             tool_results = []
@@ -138,6 +191,8 @@ class ResearchAgent:
                 yield ToolCall(block.name, block.input)
                 result, is_error = self.tool_runner(block.name, block.input)
                 yield ToolResult(block.name, is_error)
+                if self.guardrail and not is_error:
+                    self.sources.append(readable_source(block.name, result))
                 tool_results.append(
                     {
                         "type": "tool_result",
@@ -154,6 +209,20 @@ class ResearchAgent:
             "Try a narrower question.",
             usage,
         )
+
+    def _review(self, answer: str, question: str) -> GuardrailReport:
+        """Run the output checks on a finished answer. Fail closed: if the guardrail
+        can't be reached, the report says the answer is unverified."""
+        try:
+            output = self.guardrail.check_output(answer)
+            grounding = (
+                self.guardrail.check_grounding(answer, self.sources, question)
+                if self.sources  # nothing to ground against if no data was fetched
+                else None
+            )
+        except GuardrailUnavailable:
+            return GuardrailReport(error=FAIL_CLOSED_MESSAGE.format(profile=config.AWS_PROFILE))
+        return GuardrailReport(output=output, grounding=grounding)
 
     def write_note(self) -> tuple[ResearchNote, Usage]:
         """Turn the research conversation so far into a structured, validated ResearchNote.

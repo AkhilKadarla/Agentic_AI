@@ -14,7 +14,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
-- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails, Knowledge Base (RAG) over 10-Ks
+- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails ✅, Knowledge Base (RAG) over 10-Ks
 - [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
@@ -55,6 +55,25 @@ FINSIGHT_BEDROCK_MODEL=us.anthropic.claude-sonnet-4-6   # "us." = US-only proces
 Everything else (chat, notes, UI) works the same. Differences are isolated in
 `src/finsight/providers.py`.
 
+## Compliance guardrail (Amazon Bedrock Guardrails)
+
+An optional guardrail checks every question before Claude sees it and every answer after
+it streams, with either provider (it needs an AWS login):
+
+- **Blocks** personalized investment advice, insider information, personal data
+  (SSNs, card and bank account numbers), prompt attacks and harmful content
+- **Flags** answer paragraphs not directly supported by the fetched SEC data
+  (unverifiable calculations, or claims from the model's memory) for human review
+- **Fails closed**: if the guardrail can't be reached, FinSight won't answer
+
+```bash
+FINSIGHT_GUARDRAIL_ID=<your guardrail id>
+FINSIGHT_GUARDRAIL_VERSION=3          # pin a published version, never DRAFT in real use
+```
+
+Before publishing a new guardrail version, run the regression suite against the draft:
+`uv run python scripts/guardrail_suite.py DRAFT`
+
 ## Development checks
 
 ```bash
@@ -71,6 +90,7 @@ src/finsight/   # application code
   cli.py        # command-line interface
   agent.py      # research agent: loop, memory, streaming events
   providers.py  # Anthropic API vs Amazon Bedrock (client + request settings)
+  guardrail.py  # Bedrock Guardrails: input/output checks, grounding per paragraph
   llm.py        # simplest single Claude call (ask)
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)
@@ -78,7 +98,8 @@ src/finsight/   # application code
   tools.py      # tool definitions Claude can call
   sec.py        # SEC EDGAR API client
   config.py     # settings loaded from .env
-tests/          # automated tests (Phase 1)
+tests/          # automated tests (no network, no API calls)
+scripts/        # manual live checks (e.g. guardrail regression suite)
 ```
 
 ## License

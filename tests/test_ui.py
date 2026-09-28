@@ -146,3 +146,47 @@ def test_answer_after_tool_calls_starts_a_new_paragraph() -> None:
     app.chat_input[0].set_value("q").run()
 
     assert app.session_state["chat"][-1]["text"] == "Let me fetch the data.\n\n## Result"
+
+
+# ---------- guardrail display ----------
+
+
+def test_blocked_question_shows_guardrail_warning() -> None:
+    from finsight.guardrail import Guardrail
+    from tests.test_guardrail import BLOCK_MESSAGE, blocked_by_topic, fake_bedrock
+
+    guard = Guardrail("gr-1", "3", client=fake_bedrock(blocked_by_topic()))
+    agent = ResearchAgent(client=MagicMock(), guardrail=guard)
+    app = app_with(agent)
+
+    app.chat_input[0].set_value("Should I buy NVIDIA?").run()
+
+    assert not app.exception
+    message = app.session_state["chat"][-1]
+    assert message["text"] == BLOCK_MESSAGE
+    assert message["guard"]["status"] == "blocked"
+    assert "Claude was not called" in app.warning[0].value
+    agent.client.beta.messages.stream.assert_not_called()
+
+
+def test_flagged_paragraphs_are_listed_for_review() -> None:
+    from finsight.guardrail import Guardrail
+    from tests.test_guardrail import fake_bedrock, grounding, passed
+
+    guard = Guardrail("gr-1", "3", client=fake_bedrock(passed(), passed(), grounding(0.04)))
+    client = scripted_client(
+        FakeStream([tool_use_block("get_financial_facts", {"ticker": "AAPL"})], "tool_use"),
+        FakeStream([text_block("Revenue grew 6.4% year over year, a solid result.")], "end_turn"),
+    )
+    agent = ResearchAgent(
+        client=client, tool_runner=MagicMock(return_value=("{}", False)), guardrail=guard
+    )
+    app = app_with(agent)
+
+    app.chat_input[0].set_value("Apple growth?").run()
+
+    assert not app.exception
+    guard_info = app.session_state["chat"][-1]["guard"]
+    assert guard_info["status"] == "flagged"
+    assert guard_info["flagged"][0][1] == 0.04
+    assert "1 of 1 paragraphs" in app.expander[-1].label
