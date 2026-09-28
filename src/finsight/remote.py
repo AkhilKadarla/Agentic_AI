@@ -57,6 +57,10 @@ class RemoteError(Exception):
     pass
 
 
+class LoginExpired(RemoteError):
+    pass
+
+
 # ---------- login (authorization code + PKCE) ----------
 
 
@@ -179,6 +183,40 @@ def login(open_browser=webbrowser.open, http: httpx.Client | None = None) -> str
         return exchange_code(client, domain, client_id, code, verifier)
 
 
+# Logins started in the web UI and not finished yet: state -> PKCE verifier. The redirect back
+# from Cognito opens a fresh Streamlit session, so the verifier can't live in session_state;
+# a module-level dict survives because Streamlit re-runs ui.py but keeps imported modules.
+PENDING_LOGINS: dict[str, str] = {}
+MAX_PENDING = 100
+
+
+def start_web_login(domain: str, client_id: str) -> str:
+    """A login URL for the web UI; remembers its verifier until finish_web_login()."""
+    verifier, challenge = pkce_pair()
+    state = secrets.token_urlsafe(16)
+    if len(PENDING_LOGINS) >= MAX_PENDING:
+        PENDING_LOGINS.pop(next(iter(PENDING_LOGINS)))  # forget the oldest unfinished login
+    PENDING_LOGINS[state] = verifier
+    return authorize_url(domain, client_id, challenge, state)
+
+
+def finish_web_login(domain: str, client_id: str, params: dict[str, str]) -> str:
+    """Cognito redirected back with ?code=&state= (or ?error=): return the access token."""
+    if "error" in params:
+        raise LoginError(f"login failed: {params['error']}")
+    verifier = PENDING_LOGINS.pop(params.get("state", ""), None)  # each login works once
+    if verifier is None:
+        raise LoginError("that login link expired or was already used - please log in again")
+    with httpx.Client(timeout=TIMEOUT) as http:
+        return exchange_code(http, domain, client_id, params["code"], verifier)
+
+
+def logout_url(domain: str, client_id: str) -> str:
+    """Cognito's logout ends its own login session too, then returns to the app."""
+    query = urllib.parse.urlencode({"client_id": client_id, "logout_uri": REDIRECT_URI})
+    return f"https://{domain}/logout?{query}"
+
+
 # ---------- calling the deployed agent ----------
 
 
@@ -225,6 +263,7 @@ class RemoteAgent:
         self.http = http or httpx.Client(timeout=TIMEOUT)
         self.token = token
         self.total_usage = Usage()
+        self.model = ""  # the model that answered (from Done events), for cost estimates
         self._new_session()
 
     def _new_session(self) -> None:
@@ -248,6 +287,7 @@ class RemoteAgent:
                 event = dict_to_event(json.loads(line.removeprefix("data: ")))
                 if isinstance(event, Done):
                     self._count(event.usage)
+                    self.model = event.model or self.model
                 yield event
 
     def write_note(self) -> tuple[ResearchNote, Usage]:
@@ -274,7 +314,7 @@ class RemoteAgent:
 
 def _check(response: httpx.Response) -> None:
     if response.status_code == 401:
-        raise RemoteError("not logged in or login expired (tokens last 1 hour) - run it again")
+        raise LoginExpired("not logged in or login expired (tokens last 1 hour) - log in again")
     if response.status_code != 200:
         response.read()
         raise RemoteError(f"server returned {response.status_code}: {response.text[:300]}")

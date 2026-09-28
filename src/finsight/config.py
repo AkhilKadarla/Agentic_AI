@@ -43,6 +43,9 @@ TRACE_RETENTION_DAYS = int(os.getenv("FINSIGHT_TRACE_RETENTION_DAYS", "30"))
 COGNITO_DOMAIN = os.getenv("FINSIGHT_COGNITO_DOMAIN")  # e.g. finsight-abc123.auth....com
 COGNITO_CLIENT_ID = os.getenv("FINSIGHT_COGNITO_CLIENT_ID")
 RUNTIME_ARN = os.getenv("FINSIGHT_RUNTIME_ARN")
+# Where the web UI's agent runs: "local" (on this machine, default) or "deployed" (log in,
+# then use the agent on AgentCore Runtime).
+UI_BACKEND = os.getenv("FINSIGHT_UI_BACKEND", "local").lower()
 
 # USD per million tokens (Anthropic list prices; Bedrock on-demand prices are similar but
 # check the AWS pricing page). Cache writes cost 1.25x input, cache reads 0.1x input.
