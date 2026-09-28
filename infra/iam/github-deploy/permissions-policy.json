@@ -36,14 +36,22 @@
       "Effect": "Allow",
       "Action": "bedrock-agentcore:CreateAgentRuntime",
       "Resource": "*",
-      "Condition": { "StringEquals": { "bedrock-agentcore:RuntimeAuthorizerType": "CUSTOM_JWT" } }
+      "Condition": {
+        "StringEquals": {
+          "bedrock-agentcore:RuntimeAuthorizerType": "CUSTOM_JWT"
+        }
+      }
     },
     {
       "Sid": "UpdateRuntimeOnlyWithLogin",
       "Effect": "Allow",
       "Action": "bedrock-agentcore:UpdateAgentRuntime",
       "Resource": "arn:aws:bedrock-agentcore:us-east-1:ACCOUNT_ID:runtime/finsight-*",
-      "Condition": { "StringEquals": { "bedrock-agentcore:RuntimeAuthorizerType": "CUSTOM_JWT" } }
+      "Condition": {
+        "StringEquals": {
+          "bedrock-agentcore:RuntimeAuthorizerType": "CUSTOM_JWT"
+        }
+      }
     },
     {
       "Sid": "CreateDefaultEndpoint",
@@ -74,10 +82,18 @@
       ]
     },
     {
-      "Sid": "RuntimeWorkloadIdentity",
+      "Sid": "CreateRuntimeWorkloadIdentity",
+      "Effect": "Allow",
+      "Action": "bedrock-agentcore:CreateWorkloadIdentity",
+      "Resource": [
+        "arn:aws:bedrock-agentcore:us-east-1:ACCOUNT_ID:workload-identity-directory/default",
+        "arn:aws:bedrock-agentcore:us-east-1:ACCOUNT_ID:workload-identity-directory/default/workload-identity/*"
+      ]
+    },
+    {
+      "Sid": "ManageFinSightWorkloadIdentity",
       "Effect": "Allow",
       "Action": [
-        "bedrock-agentcore:CreateWorkloadIdentity",
         "bedrock-agentcore:GetWorkloadIdentity",
         "bedrock-agentcore:UpdateWorkloadIdentity"
       ],
@@ -91,7 +107,11 @@
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::ACCOUNT_ID:role/finsight-agentcore-runtime",
-      "Condition": { "StringEquals": { "iam:PassedToService": "bedrock-agentcore.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "bedrock-agentcore.amazonaws.com"
+        }
+      }
     }
   ]
 }
