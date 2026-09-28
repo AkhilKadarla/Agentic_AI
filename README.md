@@ -14,7 +14,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
-- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails ✅, Knowledge Base (RAG) over 10-Ks
+- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails ✅, Knowledge Base (RAG) over 10-Ks (indexing ✅)
 - [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
@@ -74,6 +74,19 @@ FINSIGHT_GUARDRAIL_VERSION=3          # pin a published version, never DRAFT in 
 Before publishing a new guardrail version, run the regression suite against the draft:
 `uv run python scripts/guardrail_suite.py DRAFT`
 
+## 10-K text search (Amazon Bedrock Knowledge Base)
+
+FinSight can index the narrative sections of 10-Ks (Risk Factors, MD&A) into a Bedrock
+Knowledge Base backed by S3 Vectors, so answers can cite what companies actually wrote.
+
+```bash
+uv run finsight index TSLA AAPL      # download, extract sections, upload, sync
+uv run finsight index --list         # what's indexed
+```
+
+Settings: `FINSIGHT_KB_ID`, `FINSIGHT_KB_DATA_SOURCE_ID`, `FINSIGHT_FILINGS_BUCKET`.
+The IAM policy the developer role needs is in `infra/iam/`.
+
 ## Development checks
 
 ```bash
@@ -91,6 +104,8 @@ src/finsight/   # application code
   agent.py      # research agent: loop, memory, streaming events
   providers.py  # Anthropic API vs Amazon Bedrock (client + request settings)
   guardrail.py  # Bedrock Guardrails: input/output checks, grounding per paragraph
+  filings.py    # extract Risk Factors / MD&A text from 10-K HTML
+  knowledge_base.py  # Bedrock Knowledge Base: upload with labels, sync, search
   llm.py        # simplest single Claude call (ask)
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)
@@ -100,6 +115,7 @@ src/finsight/   # application code
   config.py     # settings loaded from .env
 tests/          # automated tests (no network, no API calls)
 scripts/        # manual live checks (e.g. guardrail regression suite)
+infra/          # infrastructure as code (IAM policies)
 ```
 
 ## License

@@ -16,3 +16,6 @@ def default_provider(monkeypatch):
     monkeypatch.setattr(config, "AWS_PROFILE", None)
     monkeypatch.setattr(config, "GUARDRAIL_ID", None)  # no guardrail unless a test adds one
     monkeypatch.setattr(config, "GUARDRAIL_VERSION", None)
+    monkeypatch.setattr(config, "KB_ID", None)  # no Knowledge Base unless a test adds one
+    monkeypatch.setattr(config, "KB_DATA_SOURCE_ID", None)
+    monkeypatch.setattr(config, "FILINGS_BUCKET", None)

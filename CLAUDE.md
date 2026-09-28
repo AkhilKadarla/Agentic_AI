@@ -43,4 +43,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   errors; version must be pinned (FINSIGHT_GUARDRAIL_VERSION). Grounding sources are
   readable text with written dates, tables checked as sentences (measured: big score gains).
   Run scripts/guardrail_suite.py before publishing a guardrail version
+- Knowledge Base: filings.py extracts 10-K sections (heuristics documented there, each from a
+  real filing); knowledge_base.py uploads `filings/<TICKER>/<FYE>/<section>.txt` + `.metadata.json`
+  labels, syncs, and searches with a ticker filter. `finsight index` prepares companies ahead
 - Never present outputs as financial advice
