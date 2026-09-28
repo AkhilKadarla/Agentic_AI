@@ -1,6 +1,6 @@
 # Number accuracy - baseline
 
-50 graded rows (0 truncated, excluded) · 0 failed attempts · model claude-sonnet-4-6
+50 graded rows (0 truncated, excluded) · 0 failed attempts · model claude-sonnet-4-6 · harness 16d4f3a416c1
 
 - **Correct: 50/50 = 100%** (95% CI 93%-100%)
 - **From data: 50/50 = 100%** (95% CI 93%-100%)

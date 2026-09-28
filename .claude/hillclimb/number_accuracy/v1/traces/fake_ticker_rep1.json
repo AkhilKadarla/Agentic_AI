@@ -1,0 +1,37 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was ZZQX's revenue last year?"
+ },
+ {
+  "role": "assistant",
+  "content": "Sure, let me look up the revenue data and recent filings for **ZZQX** right away!",
+  "thinking": "The user is asking about a company with ticker \"ZZQX\". Let me try to look up their filings and financial data."
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"ZZQX\",\n  \"metric\": \"revenue\",\n  \"years\": 1\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_company_filings",
+  "content": "{\n  \"ticker\": \"ZZQX\",\n  \"form_type\": \"10-K\",\n  \"limit\": 1\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "No SEC-registered company found for ticker 'ZZQX'"
+ },
+ {
+  "role": "tool_result",
+  "content": "No SEC-registered company found for ticker 'ZZQX'"
+ },
+ {
+  "role": "assistant",
+  "content": "I wasn't able to find any SEC-registered company under the ticker **ZZQX**. This could mean a few things:\n\n1. **The ticker may be misspelled.** Please double-check the ticker symbol and try again.\n2. **The company may not be US-listed.** My tools only cover companies registered with the SEC (U.S.-listed companies).\n3. **The company may be delisted or not publicly traded.**\n\nCould you verify the ticker or provide the full company name? I'd be happy to look it up once we have the correct information!"
+ }
+]

@@ -37,3 +37,6 @@ reports/
 
 # Local traces (may contain questions and answers)
 logs/
+
+# Eval harness approvals are personal: everyone reviews and approves on their own machine
+.claude/hillclimb/**/_harness_approval.json

@@ -1,0 +1,29 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was Tesla's operating cash flow in its most recent fiscal year?"
+ },
+ {
+  "role": "assistant",
+  "content": "Sure! Let me pull that data from Tesla's SEC filings right now.",
+  "thinking": "The user wants to know Tesla's operating cash flow for its most recent fiscal year. Let me fetch that data."
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"TSLA\",\n  \"metric\": \"operating_cash_flow\",\n  \"years\": 1\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"Tesla, Inc.\", \"ticker\": \"TSLA\", \"metric\": \"operating_cash_flow\", \"xbrl_concept\": \"NetCashProvidedByUsedInOperatingActivities\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2025-12-31\", \"value\": 14747000000, \"filed\": \"2026-01-29\"}]}"
+ },
+ {
+  "role": "assistant",
+  "content": "Here are the results straight from Tesla's most recent **10-K** filing:\n\n| Fiscal Year End | Operating Cash Flow | Filed |\n|---|---|---|\n| December 31, 2025 | **$14.75 billion** | January 29, 2026 |\n\n### Key Takeaway\nTesla generated approximately **$14.75 billion in operating cash flow** in fiscal year 2025. This figure \u2014 formally reported as *Net Cash Provided by Operating Activities* \u2014 represents the cash Tesla produced from its core business operations (vehicle sales, energy products, services, etc.) after accounting for working capital changes, but *before* capital expenditures and financing activities.\n\n> **Note:** This is educational data sourced directly from Tesla's SEC filing. It is not investment advice.\n\nWould you like me to compare this to prior years, or look at related metrics like capital expenditures or free cash flow trends?",
+  "thinking": "Tesla's most recent fiscal year ended December 31, 2025, and their operating cash flow was $14,747,000,000 (approximately $14.7 billion). This was filed on January 29, 2026."
+ }
+]
