@@ -15,7 +15,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
 - [x] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Guardrails, Knowledge Base (RAG) over 10-K text
-- [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
+- [ ] **Phase 7 - Evals & observability:** number-accuracy eval ✅ (baseline 100%), tracing
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
 
@@ -89,6 +89,22 @@ With a Knowledge Base configured, the agent gets a `search_filings` tool and ans
 
 Settings: `FINSIGHT_KB_ID`, `FINSIGHT_KB_DATA_SOURCE_ID`, `FINSIGHT_FILINGS_BUCKET`.
 The IAM policy the developer role needs is in `infra/iam/`.
+
+## Evals
+
+`evals/number_accuracy/` measures whether FinSight gets financial figures right: 25
+reviewed questions with answers from SEC data (single facts, multi-year, calculations,
+comparisons, and "unavailable" traps), graded automatically (numbers) and by a Claude
+Haiku judge (traps).
+
+```bash
+uv run python -m evals.number_accuracy.run_eval --approve-harness   # after reviewing changes
+uv run python -m evals.number_accuracy.run_eval --reps 2            # ~$0.60, ~3 min
+uv run python -m evals.number_accuracy.run_eval --report
+```
+
+Baseline (Sonnet 4.6 on Bedrock): **50/50 correct, 50/50 from fetched data**. Results and
+transcripts: `.claude/hillclimb/number_accuracy/baseline/`.
 
 ## Development checks
 

@@ -7,8 +7,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Generated eval output (results, transcripts) is data, not code: leave it byte-for-byte
       - id: trailing-whitespace
+        exclude: ^\.claude/hillclimb/
       - id: end-of-file-fixer
+        exclude: ^\.claude/hillclimb/
       - id: check-yaml
       - id: check-toml
       - id: check-added-large-files

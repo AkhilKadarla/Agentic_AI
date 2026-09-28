@@ -48,4 +48,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   labels, syncs, and searches with ticker (+ optional section) filters. `finsight index` prepares
   companies ahead. The `search_filings` tool is offered only when FINSIGHT_KB_ID is set
   (tools.available_tools()); its passages become guardrail grounding evidence
+- Evals: evals/number_accuracy (cases frozen in cases.jsonl; grading.py programmatic + Haiku
+  judge for traps; run_eval.py writes .claude/hillclimb/number_accuracy/<variant>/). The runner
+  refuses to run after harness changes until the USER runs --approve-harness - never approve
+  it yourself. Paid runs need the user's explicit go-ahead
 - Never present outputs as financial advice

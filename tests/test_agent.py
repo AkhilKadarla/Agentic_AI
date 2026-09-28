@@ -24,6 +24,7 @@ class FakeStream:
         self.message = SimpleNamespace(
             content=content,
             stop_reason=stop_reason,
+            model="claude-opus-5",  # real responses always name the model that answered
             usage=SimpleNamespace(
                 input_tokens=10,
                 output_tokens=5,
@@ -289,3 +290,11 @@ def test_chat_note_command_saves_note(monkeypatch, tmp_path, capsys) -> None:
 
     assert "# Apple: Revenue Check / FY2025" in capsys.readouterr().out
     assert len(list((tmp_path / "reports").glob("*.json"))) == 1
+
+
+def test_done_reports_the_model_and_stop_reason() -> None:
+    client = scripted_client(FakeStream([text_block("hi")], "end_turn"))
+
+    done = list(ResearchAgent(client=client).send("q"))[-1]
+
+    assert (done.model, done.stop_reason) == ("claude-opus-5", "end_turn")
