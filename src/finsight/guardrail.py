@@ -208,6 +208,14 @@ def readable_source(tool_name: str, result: str) -> str:
 
 
 def _readable(tool_name: str, data: dict) -> str:
+    if tool_name == "search_filings":  # passages are already prose: add where they came from
+        sections = {"risk_factors": "Risk Factors", "mdna": "MD&A"}
+        return "\n".join(
+            f"From {data['ticker']}'s 10-K for the fiscal year ended "
+            f"{_written(p['fiscal_year_end'])}, {sections.get(p['section'], p['section'])} "
+            f"section: {p['text']}"
+            for p in data["passages"]
+        )
     company = f"{data['company']} ({data['ticker']})"
     if tool_name == "get_financial_facts":
         metric = data["metric"].replace("_", " ")

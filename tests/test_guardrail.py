@@ -326,3 +326,26 @@ def test_cli_describes_each_report_kind() -> None:
     assert "(0.04) Up 6.4%" in describe_report(flagged)
     assert "FLAGGED (personal data: email)" in describe_report(retracted)
     assert "UNVERIFIED" in describe_report(GuardrailReport(error="down"))
+
+
+def test_readable_source_for_filing_passages() -> None:
+    result = json.dumps(
+        {
+            "ticker": "TSLA",
+            "query": "supplier risk",
+            "passages": [
+                {
+                    "section": "risk_factors",
+                    "fiscal_year_end": "2025-12-31",
+                    "relevance": 0.73,
+                    "text": "We rely on single-source suppliers.",
+                    "source_url": "https://sec.gov/tsla",
+                }
+            ],
+        }
+    )
+
+    assert readable_source("search_filings", result) == (
+        "From TSLA's 10-K for the fiscal year ended December 31, 2025 (2025-12-31), "
+        "Risk Factors section: We rely on single-source suppliers."
+    )

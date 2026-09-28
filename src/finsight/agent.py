@@ -31,7 +31,7 @@ from finsight.providers import (
     pricing_key,
     provider_options,
 )
-from finsight.tools import TOOLS, run_tool
+from finsight.tools import available_tools, run_tool
 
 MAX_TURNS = 10
 CACHE = {"type": "ephemeral"}  # prompt-cache marker (5-minute lifetime)
@@ -272,7 +272,7 @@ class ResearchAgent:
         Prompt caching: the conversation prefix (tools + system + history) is re-sent every
         turn; caching it makes those repeated input tokens ~90% cheaper.
         """
-        options = {"tools": TOOLS, **provider_options()}  # model, thinking, fallbacks...
+        options = {"tools": available_tools(), **provider_options()}  # + model, thinking...
         if automatic_caching():
             # One setting: the API caches up to the end of the request automatically.
             return {

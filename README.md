@@ -14,7 +14,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 3 - First agent:** raw LLM call → tool use → agent loop
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
-- [ ] **Phase 6 - AWS Bedrock:** Claude on Bedrock ✅, Guardrails ✅, Knowledge Base (RAG) over 10-Ks (indexing ✅)
+- [x] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Guardrails, Knowledge Base (RAG) over 10-K text
 - [ ] **Phase 7 - Evals & observability:** automated answer-quality checks, tracing
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
@@ -83,6 +83,9 @@ Knowledge Base backed by S3 Vectors, so answers can cite what companies actually
 uv run finsight index TSLA AAPL      # download, extract sections, upload, sync
 uv run finsight index --list         # what's indexed
 ```
+
+With a Knowledge Base configured, the agent gets a `search_filings` tool and answers
+"why" questions by quoting the filing; the guardrail grounds those quotes too.
 
 Settings: `FINSIGHT_KB_ID`, `FINSIGHT_KB_DATA_SOURCE_ID`, `FINSIGHT_FILINGS_BUCKET`.
 The IAM policy the developer role needs is in `infra/iam/`.

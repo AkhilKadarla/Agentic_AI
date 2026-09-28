@@ -45,5 +45,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   Run scripts/guardrail_suite.py before publishing a guardrail version
 - Knowledge Base: filings.py extracts 10-K sections (heuristics documented there, each from a
   real filing); knowledge_base.py uploads `filings/<TICKER>/<FYE>/<section>.txt` + `.metadata.json`
-  labels, syncs, and searches with a ticker filter. `finsight index` prepares companies ahead
+  labels, syncs, and searches with ticker (+ optional section) filters. `finsight index` prepares
+  companies ahead. The `search_filings` tool is offered only when FINSIGHT_KB_ID is set
+  (tools.available_tools()); its passages become guardrail grounding evidence
 - Never present outputs as financial advice
