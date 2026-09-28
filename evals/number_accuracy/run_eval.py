@@ -62,6 +62,7 @@ STATE = {
 }
 RETRYABLE = (anthropic.RateLimitError, anthropic.InternalServerError, anthropic.APIConnectionError)
 _write_lock = threading.Lock()
+HARNESS_SHA = ""  # set in main() after the approval check
 
 
 # ---------- harness gate ----------
@@ -75,6 +76,8 @@ def harness_sha() -> str:
 
 
 def check_harness(approve: bool) -> None:
+    """The approval file is personal (git-ignored): each person reviews and approves the
+    harness on their own machine. Results record the harness sha they ran under."""
     approval = FLOW / "_harness_approval.json"
     current = harness_sha()
     if approve:
@@ -187,6 +190,7 @@ def run_case(case: dict, rep: int, out: Path, judge_client) -> None:
 
     usage: Usage = run["usage"]
     row = {
+        "harness_sha": HARNESS_SHA,  # which exact code produced this result (audit trail)
         "prompt_id": case["id"],
         "rep": rep,
         "prompt": case["question"],
@@ -292,9 +296,11 @@ def report(out: Path) -> str:
     lines = [f"# Number accuracy - {out.name}", ""]
     if not all_rows:
         return "\n".join([*lines, "No results yet."])
+    shas = sorted({r.get("harness_sha", "unknown")[:12] for r in all_rows})
     lines.append(
         f"{len(all_rows)} graded rows ({len(all_rows) - len(rows)} truncated, excluded) · "
-        f"{len(errors)} failed attempts · model {all_rows[0]['model']}"
+        f"{len(errors)} failed attempts · model {all_rows[0]['model']} · "
+        f"harness {', '.join(shas)}"
     )
     lines.append("")
     for metric in STATE["metrics"]:
@@ -351,6 +357,8 @@ def main() -> int:
     check_harness(args.approve_harness)
     if args.approve_harness:
         return 0
+    global HARNESS_SHA
+    HARNESS_SHA = harness_sha()
 
     FLOW.mkdir(parents=True, exist_ok=True)
     (FLOW / "_state.json").write_text(json.dumps(STATE, indent=2))
