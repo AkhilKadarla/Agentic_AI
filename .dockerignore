@@ -12,4 +12,5 @@ evals
 tests
 scripts
 infra
+deploy
 **/__pycache__

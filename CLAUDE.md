@@ -59,4 +59,10 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - API: api.py follows the AgentCore Runtime HTTP contract (port 8080, /ping, /invocations SSE,
   session header). Auth is enforced by AgentCore (Cognito JWT), not in the app. UI libraries live
   in the `ui` dependency group, excluded from the arm64 Docker image (`--no-default-groups`)
+- Deploy: .github/workflows/deploy.yml runs after CI passes on main (or by hand), waits for
+  the owner's approval in the GitHub `production` environment, logs in to AWS with OIDC (no
+  stored keys), pushes `finsight:<sha>` to ECR (immutable tags) and runs deploy/agentcore.py
+  (create-or-update the `finsight` AgentCore runtime with the Cognito JWT authorizer). Settings
+  are `production` environment variables, not repo files (public repo). AWS resources and IAM
+  live in infra/ as code; setup uses just-in-time policies that are reverted right after
 - Never present outputs as financial advice

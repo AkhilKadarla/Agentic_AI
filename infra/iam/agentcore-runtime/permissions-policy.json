@@ -50,18 +50,6 @@
       "Condition": { "StringEquals": { "cloudwatch:namespace": "bedrock-agentcore" } }
     },
     {
-      "Sid": "WorkloadIdentityFromJwtOnly",
-      "Effect": "Allow",
-      "Action": [
-        "bedrock-agentcore:GetWorkloadAccessToken",
-        "bedrock-agentcore:GetWorkloadAccessTokenForJWT"
-      ],
-      "Resource": [
-        "arn:aws:bedrock-agentcore:us-east-1:ACCOUNT_ID:workload-identity-directory/default",
-        "arn:aws:bedrock-agentcore:us-east-1:ACCOUNT_ID:workload-identity-directory/default/workload-identity/finsight-*"
-      ]
-    },
-    {
       "Sid": "InvokeClaudeViaUsProfile",
       "Effect": "Allow",
       "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
