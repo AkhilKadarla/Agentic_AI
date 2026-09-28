@@ -21,6 +21,7 @@ import boto3
 RUNTIME_NAME = "finsight"  # letters, digits and _ only; AgentCore adds a random id suffix
 REGION = "us-east-1"
 FAILED = {"CREATE_FAILED", "UPDATE_FAILED"}
+TAGS = {"project": "finsight"}  # for cost reports and audits
 
 # Required deploy settings (GitHub environment variables / secrets).
 REQUIRED = ["RUNTIME_ROLE_ARN", "COGNITO_USER_POOL_ID", "COGNITO_CLIENT_ID", "SEC_USER_AGENT"]
@@ -111,9 +112,10 @@ def deploy(client, image: str, env: dict[str, str], sleep=time.sleep) -> dict:
         response = client.update_agent_runtime(agentRuntimeId=existing["agentRuntimeId"], **request)
     else:
         print(f"Creating runtime {RUNTIME_NAME}", flush=True)
-        response = client.create_agent_runtime(
-            agentRuntimeName=RUNTIME_NAME, tags={"project": "finsight"}, **request
-        )
+        response = client.create_agent_runtime(agentRuntimeName=RUNTIME_NAME, **request)
+        # Tag after creating, not during: at create time IAM checks tagging against
+        # runtime/* (no id yet); now the deploy role's finsight-* tagging rule applies.
+        client.tag_resource(resourceArn=response["agentRuntimeArn"], tags=TAGS)
     runtime = wait_until_ready(client, response["agentRuntimeId"], sleep=sleep)
     print(f"READY: runtime {runtime['agentRuntimeId']} version {runtime['agentRuntimeVersion']}")
     return runtime
