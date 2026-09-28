@@ -1,0 +1,81 @@
+# Deploy: ships main to production (Amazon Bedrock AgentCore Runtime).
+#
+# Runs only after CI passes on a push to main (so only tested commits ship), or by hand.
+# The `production` environment then waits for the owner's approval, and only allows main.
+# AWS access is keyless: GitHub issues a short-lived OIDC token that AWS trusts only for
+# this repository's production environment (infra/iam/github-deploy/).
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never interrupt one halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, push, deploy
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04-arm # AgentCore Runtime needs linux/arm64
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # lets this job ask GitHub for the OIDC token
+    env:
+      # The exact commit CI tested (for a manual run: the commit it was started on)
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Log in to AWS (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: finsight-deploy-${{ github.run_id }}
+          aws-region: us-east-1
+          mask-aws-account-id: true # public repo: keep the account id out of the logs
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2.1.7
+
+      - name: Build and push image (tag = commit)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          IMAGE="$REGISTRY/$REPOSITORY:$SHA"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          # Tags are immutable: a re-run for the same commit reuses the image already pushed
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+            echo "Image for $SHA already in ECR; skipping build"
+          else
+            docker build --platform linux/arm64 -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
+
+      - uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Deploy to AgentCore Runtime
+        env:
+          RUNTIME_ROLE_ARN: ${{ vars.RUNTIME_ROLE_ARN }}
+          COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+          COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
+          FINSIGHT_BEDROCK_MODEL: ${{ vars.FINSIGHT_BEDROCK_MODEL }}
+          FINSIGHT_GUARDRAIL_ID: ${{ vars.FINSIGHT_GUARDRAIL_ID }}
+          FINSIGHT_GUARDRAIL_VERSION: ${{ vars.FINSIGHT_GUARDRAIL_VERSION }}
+          FINSIGHT_KB_ID: ${{ vars.FINSIGHT_KB_ID }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }} # a secret only so logs hide the email
+        run: uv run --no-default-groups python -m deploy.agentcore --image "$IMAGE"
