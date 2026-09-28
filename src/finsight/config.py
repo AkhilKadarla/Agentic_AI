@@ -38,6 +38,12 @@ TRACING = os.getenv("FINSIGHT_TRACING", "on").lower() != "off"
 TRACE_CONTENT = os.getenv("FINSIGHT_TRACE_CONTENT", "on").lower() != "off"
 TRACE_RETENTION_DAYS = int(os.getenv("FINSIGHT_TRACE_RETENTION_DAYS", "30"))
 
+# The deployed FinSight (Phase 8): Cognito login + the AgentCore runtime to call.
+# None of these are secrets. Used by `finsight remote`.
+COGNITO_DOMAIN = os.getenv("FINSIGHT_COGNITO_DOMAIN")  # e.g. finsight-abc123.auth....com
+COGNITO_CLIENT_ID = os.getenv("FINSIGHT_COGNITO_CLIENT_ID")
+RUNTIME_ARN = os.getenv("FINSIGHT_RUNTIME_ARN")
+
 # USD per million tokens (Anthropic list prices; Bedrock on-demand prices are similar but
 # check the AWS pricing page). Cache writes cost 1.25x input, cache reads 0.1x input.
 PRICING = {

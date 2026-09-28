@@ -14,6 +14,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - `uv run ruff check --fix . && uv run ruff format .` - lint and format
 - `uv run pre-commit run --all-files` - run all commit hooks
 - `uv run finsight ui` - Streamlit app on localhost:8501 (config in .streamlit/config.toml)
+- `uv run finsight remote` - log in (Cognito, PKCE) and chat with the deployed agent
 - `uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080` - web API locally
 - `uv add <pkg>` / `uv add --dev <pkg>` - add a dependency (never edit versions by hand)
 
@@ -65,4 +66,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   (create-or-update the `finsight` AgentCore runtime with the Cognito JWT authorizer). Settings
   are `production` environment variables, not repo files (public repo). AWS resources and IAM
   live in infra/ as code; setup uses just-in-time policies that are reverted right after
+- Remote: remote.py logs in with authorization code + PKCE (local callback on :8501, tokens in
+  memory only) and RemoteAgent mirrors ResearchAgent, turning SSE back into agent events
+  (dict_to_event is the inverse of api.event_to_dict; tests round-trip every event type)
 - Never present outputs as financial advice

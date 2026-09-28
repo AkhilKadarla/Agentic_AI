@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> None:
     note_cmd.add_argument("question", help='e.g. "Assess Apple\'s financial health"')
     commands.add_parser("chat", help="interactive research chat with follow-up questions")
     commands.add_parser("ui", help="open the FinSight web app in your browser")
+    commands.add_parser(
+        "remote", help="log in and chat with the deployed FinSight (AgentCore Runtime)"
+    )
     index_cmd = commands.add_parser(
         "index", help="add companies' latest 10-K text to the Knowledge Base (or --list)"
     )
@@ -66,6 +69,8 @@ def main(argv: list[str] | None = None) -> None:
         return show_traces(args.trace_id, args.limit)
     if args.command == "index":
         return index(args.tickers, show_list=args.list)
+    if args.command == "remote":
+        return remote_chat()
     if args.command == "ui":
         app = Path(__file__).with_name("ui.py")
         print("Starting FinSight - open http://localhost:8501 (Ctrl+C to stop)")
@@ -155,10 +160,11 @@ def index(tickers: list[str], show_list: bool = False) -> None:
         raise SystemExit(str(e)) from None
 
 
-def chat(agent: ResearchAgent | None = None, read=input) -> None:
+def chat(agent: ResearchAgent | None = None, read=input, label: str | None = None) -> None:
     """A read-eval-print loop: the same agent (and its memory) answers every message."""
     agent = agent or ResearchAgent()
-    print(f"FinSight chat [{describe()}] - ask about any US-listed company. {CHAT_HELP}\n")
+    label = label or describe()
+    print(f"FinSight chat [{label}] - ask about any US-listed company. {CHAT_HELP}\n")
     while True:
         try:
             message = read("you> ").strip()
@@ -179,6 +185,19 @@ def chat(agent: ResearchAgent | None = None, read=input) -> None:
             print("\nfinsight> ", end="")
             print_events(agent.send(message))
             print()
+
+
+def remote_chat() -> None:
+    """Chat with the deployed agent: same chat loop, a RemoteAgent instead of a local one."""
+    from finsight import remote
+
+    if not config.RUNTIME_ARN:
+        raise SystemExit("Set FINSIGHT_RUNTIME_ARN in .env (the deployed runtime's ARN).")
+    try:
+        token = remote.login()
+        chat(remote.RemoteAgent(token, config.RUNTIME_ARN), label="deployed on AgentCore")
+    except (remote.LoginError, remote.RemoteError) as e:
+        raise SystemExit(str(e)) from None
 
 
 def make_note(agent: ResearchAgent) -> None:
