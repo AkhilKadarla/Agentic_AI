@@ -1,0 +1,24 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was Walmart's revenue in each of its last two fiscal years?"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"WMT\",\n  \"metric\": \"revenue\",\n  \"years\": 2\n}",
+  "thinking": "The user wants Walmart's revenue for the last two fiscal years. Let me fetch that data."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"Walmart Inc.\", \"ticker\": \"WMT\", \"metric\": \"revenue\", \"xbrl_concept\": \"Revenues\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2026-01-31\", \"value\": 713163000000, \"filed\": \"2026-03-13\"}, {\"period_end\": \"2025-01-31\", \"value\": 680985000000, \"filed\": \"2026-03-13\"}]}"
+ },
+ {
+  "role": "assistant",
+  "content": "Here are Walmart Inc.'s revenues for its last two fiscal years (Walmart's fiscal year ends January 31):\n\n| Fiscal Year End | Revenue |\n|---|---|\n| January 31, 2026 | **$713.2 billion** |\n| January 31, 2025 | **$681.0 billion** |\n\n**Year-over-Year Growth:** Revenue grew by approximately **$32.2 billion**, a increase of roughly **4.7%** from FY2025 to FY2026.\n\nThese figures come from Walmart's 10-K filings as reported to the SEC. Note that Walmart's fiscal years are often referred to by the calendar year in which they end \u2014 so these would be called FY2026 and FY2025, respectively."
+ }
+]
