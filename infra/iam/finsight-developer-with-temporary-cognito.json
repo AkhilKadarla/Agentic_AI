@@ -1,0 +1,83 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FinSightDocumentBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::finsight-*",
+        "arn:aws:s3:::finsight-*/*"
+      ]
+    },
+    {
+      "Sid": "FinSightVectorBuckets",
+      "Effect": "Allow",
+      "Action": "s3vectors:*",
+      "Resource": [
+        "arn:aws:s3vectors:us-east-1:*:bucket/finsight-*",
+        "arn:aws:s3vectors:us-east-1:*:bucket/finsight-*/*"
+      ]
+    },
+    {
+      "Sid": "ListingForTheConsole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ListRoles",
+        "logs:DescribeLogGroups",
+        "logs:GetQueryResults",
+        "s3:ListAllMyBuckets",
+        "s3vectors:ListVectorBuckets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FinSightLogGroups",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:StartQuery",
+        "logs:StopQuery"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:*:log-group:/finsight/*",
+        "arn:aws:logs:us-east-1:*:log-group:/finsight/*:log-stream:*"
+      ]
+    },
+    {
+      "Sid": "TemporaryCognitoSetup",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:CreateUserPool",
+        "cognito-idp:SetUserPoolMfaConfig",
+        "cognito-idp:CreateUserPoolDomain",
+        "cognito-idp:CreateUserPoolClient",
+        "cognito-idp:CreateManagedLoginBranding",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:DescribeUserPoolDomain",
+        "cognito-idp:GetUserPoolMfaConfig",
+        "cognito-idp:ListUserPools",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:TagResource"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

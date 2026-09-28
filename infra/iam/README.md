@@ -4,6 +4,7 @@
 |---|---|---|
 | `finsight-developer.json` | SSO permission set `FinSightDeveloper` (inline) | Permanent developer access, alongside the AWS managed `AmazonBedrockFullAccess` |
 | `finsight-developer-with-temporary-iam.json` | Same, **only during setup** | Adds just-in-time rights to create one role; revert to `finsight-developer.json` right after |
+| `finsight-developer-with-temporary-cognito.json` | Same, **only during setup** | Adds just-in-time rights to create the Cognito user pool (Phase 8.2, `infra/cognito/`); revert right after |
 | `bedrock-invocation-logging/` | Role `finsight-bedrock-invocation-logging` | Lets Bedrock (and only this account's Bedrock) write model invocation logs to `/finsight/bedrock-invocations` |
 
 Replace `ACCOUNT_ID` in the templates before use. Resources are scoped by the `finsight-`
