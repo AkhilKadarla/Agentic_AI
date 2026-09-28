@@ -50,6 +50,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     index_cmd.add_argument("tickers", nargs="*", help="e.g. TSLA AAPL")
     index_cmd.add_argument("--list", action="store_true", help="show what is indexed")
+    traces_cmd = commands.add_parser("traces", help="list recent traces, or show one step by step")
+    traces_cmd.add_argument("trace_id", nargs="?", help="show this trace (first few characters)")
+    traces_cmd.add_argument("--limit", type=int, default=15)
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -59,6 +62,8 @@ def main(argv: list[str] | None = None) -> None:
         print("     uv run finsight chat")
         print("     uv run finsight ui")
         return
+    if args.command == "traces":
+        return show_traces(args.trace_id, args.limit)
     if args.command == "index":
         return index(args.tickers, show_list=args.list)
     if args.command == "ui":
@@ -87,6 +92,27 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Could not reach the Claude API - check your connection.") from None
     except AWS_CREDENTIAL_ERRORS:
         raise SystemExit(AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)) from None
+
+
+def show_traces(trace_id: str | None, limit: int) -> None:
+    from finsight import tracing
+
+    spans = tracing.load_spans()
+    if trace_id:
+        print(tracing.render_tree(spans, trace_id))
+        return
+    rows = tracing.summarize(spans)[:limit]
+    if not rows:
+        print(f"No traces yet in {tracing.TRACE_DIR}/ - ask FinSight something first.")
+        return
+    print(f"{'trace':9} {'when':16} {'secs':>5} {'cost':>7} {'tools':>5}  {'outcome':10} question")
+    for r in rows:
+        cost = f"${r['cost_usd']:.3f}" if r["cost_usd"] is not None else "-"
+        print(
+            f"{r['trace_id'][:8]:9} {r['when']:16} {r['seconds']:5.1f} {cost:>7} "
+            f"{r['tool_calls']:5}  {r['outcome']:10} {r['question'][:60]}"
+        )
+    print("\nShow one: uv run finsight traces <trace>")
 
 
 def index(tickers: list[str], show_list: bool = False) -> None:

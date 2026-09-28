@@ -52,4 +52,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   judge for traps; run_eval.py writes .claude/hillclimb/number_accuracy/<variant>/). The runner
   refuses to run after harness changes until the USER runs --approve-harness - never approve
   it yourself. Paid runs need the user's explicit go-ahead
+- Tracing: tracing.py (OpenTelemetry, gen_ai.* attributes). Spans in the agent are created
+  with child_span() and an explicit parent, never made current (send() is a generator that
+  yields mid-span). tests/conftest.py turns tracing off; tests use InMemorySpanExporter
 - Never present outputs as financial advice

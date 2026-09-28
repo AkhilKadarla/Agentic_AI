@@ -32,6 +32,12 @@ KB_ID = os.getenv("FINSIGHT_KB_ID")
 KB_DATA_SOURCE_ID = os.getenv("FINSIGHT_KB_DATA_SOURCE_ID")
 FILINGS_BUCKET = os.getenv("FINSIGHT_FILINGS_BUCKET")
 
+# Observability (OpenTelemetry traces in logs/traces/, git-ignored). Content capture records
+# question/answer text in traces: useful for debugging, but it is sensitive data.
+TRACING = os.getenv("FINSIGHT_TRACING", "on").lower() != "off"
+TRACE_CONTENT = os.getenv("FINSIGHT_TRACE_CONTENT", "on").lower() != "off"
+TRACE_RETENTION_DAYS = int(os.getenv("FINSIGHT_TRACE_RETENTION_DAYS", "30"))
+
 # USD per million tokens (Anthropic list prices; Bedrock on-demand prices are similar but
 # check the AWS pricing page). Cache writes cost 1.25x input, cache reads 0.1x input.
 PRICING = {
