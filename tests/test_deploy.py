@@ -4,6 +4,7 @@ import pytest
 
 from deploy.agentcore import DeployError, deploy, discovery_url, runtime_request
 
+RUNTIME_ARN_PREFIX = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime"
 IMAGE = "123456789012.dkr.ecr.us-east-1.amazonaws.com/finsight:abc123"
 ENV = {
     "RUNTIME_ROLE_ARN": "arn:aws:iam::123456789012:role/finsight-agentcore-runtime",
@@ -39,7 +40,14 @@ class FakeControl:
 
     def create_agent_runtime(self, **kwargs):
         self.calls.append(("create", kwargs))
-        return {"agentRuntimeId": "finsight-NEW", "status": "CREATING"}
+        return {
+            "agentRuntimeId": "finsight-NEW",
+            "agentRuntimeArn": f"{RUNTIME_ARN_PREFIX}/finsight-NEW",
+            "status": "CREATING",
+        }
+
+    def tag_resource(self, **kwargs):
+        self.calls.append(("tag", kwargs))
 
     def update_agent_runtime(self, **kwargs):
         self.calls.append(("update", kwargs))
@@ -82,10 +90,15 @@ def test_missing_settings_are_listed():
 def test_first_deploy_creates_the_runtime():
     client = FakeControl()
     runtime = deploy(client, IMAGE, ENV, sleep=no_sleep)
-    (kind, kwargs), *_ = client.calls
+    (kind, kwargs), (tag_kind, tag_kwargs) = client.calls
     assert kind == "create"
     assert kwargs["agentRuntimeName"] == "finsight"
     assert "customJWTAuthorizer" in kwargs["authorizerConfiguration"]
+    # Tags are added after create (IAM checks tags at create time against runtime/*)
+    assert "tags" not in kwargs
+    assert tag_kind == "tag"
+    assert tag_kwargs["resourceArn"].endswith("runtime/finsight-NEW")
+    assert tag_kwargs["tags"] == {"project": "finsight"}
     assert runtime["status"] == "READY"
 
 
