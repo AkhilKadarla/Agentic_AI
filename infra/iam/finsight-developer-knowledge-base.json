@@ -1,0 +1,55 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FinSightDocumentBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetEncryptionConfiguration",
+        "s3:PutEncryptionConfiguration"
+      ],
+      "Resource": ["arn:aws:s3:::finsight-*", "arn:aws:s3:::finsight-*/*"]
+    },
+    {
+      "Sid": "FinSightVectorBuckets",
+      "Effect": "Allow",
+      "Action": "s3vectors:*",
+      "Resource": [
+        "arn:aws:s3vectors:us-east-1:*:bucket/finsight-*",
+        "arn:aws:s3vectors:us-east-1:*:bucket/finsight-*/*"
+      ]
+    },
+    {
+      "Sid": "KnowledgeBaseServiceRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:PassRole",
+        "iam:CreatePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:AttachRolePolicy",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/service-role/AmazonBedrockExecutionRoleForKnowledgeBase*",
+        "arn:aws:iam::*:policy/service-role/AmazonBedrock*"
+      ]
+    },
+    {
+      "Sid": "ListingForTheConsole",
+      "Effect": "Allow",
+      "Action": ["s3:ListAllMyBuckets", "s3vectors:ListVectorBuckets", "iam:ListRoles"],
+      "Resource": "*"
+    }
+  ]
+}

@@ -27,6 +27,11 @@ AWS_PROFILE = os.getenv("AWS_PROFILE")  # e.g. "finsight" (SSO); None = default 
 GUARDRAIL_ID = os.getenv("FINSIGHT_GUARDRAIL_ID")
 GUARDRAIL_VERSION = os.getenv("FINSIGHT_GUARDRAIL_VERSION")
 
+# Amazon Bedrock Knowledge Base over 10-K text (Risk Factors, MD&A). Unset = feature off.
+KB_ID = os.getenv("FINSIGHT_KB_ID")
+KB_DATA_SOURCE_ID = os.getenv("FINSIGHT_KB_DATA_SOURCE_ID")
+FILINGS_BUCKET = os.getenv("FINSIGHT_FILINGS_BUCKET")
+
 # USD per million tokens (Anthropic list prices; Bedrock on-demand prices are similar but
 # check the AWS pricing page). Cache writes cost 1.25x input, cache reads 0.1x input.
 PRICING = {

@@ -45,6 +45,11 @@ def main(argv: list[str] | None = None) -> None:
     note_cmd.add_argument("question", help='e.g. "Assess Apple\'s financial health"')
     commands.add_parser("chat", help="interactive research chat with follow-up questions")
     commands.add_parser("ui", help="open the FinSight web app in your browser")
+    index_cmd = commands.add_parser(
+        "index", help="add companies' latest 10-K text to the Knowledge Base (or --list)"
+    )
+    index_cmd.add_argument("tickers", nargs="*", help="e.g. TSLA AAPL")
+    index_cmd.add_argument("--list", action="store_true", help="show what is indexed")
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -54,6 +59,8 @@ def main(argv: list[str] | None = None) -> None:
         print("     uv run finsight chat")
         print("     uv run finsight ui")
         return
+    if args.command == "index":
+        return index(args.tickers, show_list=args.list)
     if args.command == "ui":
         app = Path(__file__).with_name("ui.py")
         print("Starting FinSight - open http://localhost:8501 (Ctrl+C to stop)")
@@ -80,6 +87,46 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Could not reach the Claude API - check your connection.") from None
     except AWS_CREDENTIAL_ERRORS:
         raise SystemExit(AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)) from None
+
+
+def index(tickers: list[str], show_list: bool = False) -> None:
+    """Prepare companies ahead of time: extract 10-K sections, upload, then one sync."""
+    from finsight import knowledge_base, sec
+    from finsight.filings import latest_10k
+
+    try:
+        knowledge_base.require_config()
+        if show_list or not tickers:
+            indexed = knowledge_base.indexed_filings()
+            print("Indexed 10-Ks:" if indexed else "Nothing indexed yet.")
+            for ticker, years in indexed.items():
+                print(f"  {ticker}: fiscal years ending {', '.join(years)}")
+            return
+        http = sec.make_http_client()
+        uploaded = 0
+        for ticker in tickers:
+            try:
+                filing = latest_10k(ticker, http)
+            except sec.CompanyNotFoundError as e:
+                print(f"  {ticker}: skipped ({e})")
+                continue
+            knowledge_base.upload_filing(filing)
+            uploaded += len(filing.sections)
+            sizes = ", ".join(f"{s.title} {len(s.text) // 1000}K chars" for s in filing.sections)
+            print(f"  {filing.ticker}: 10-K for FY ending {filing.report_date} - {sizes}")
+            if filing.missing:
+                print(f"    not found in the 10-K: {', '.join(filing.missing)}")
+        if not uploaded:
+            return
+        print("Syncing the Knowledge Base (chunking + embedding; usually 1-5 minutes)...")
+        stats = knowledge_base.sync()
+        print(
+            f"Done: {stats.get('numberOfNewDocumentsIndexed', 0)} new, "
+            f"{stats.get('numberOfModifiedDocumentsIndexed', 0)} updated, "
+            f"{stats.get('numberOfDocumentsFailed', 0)} failed."
+        )
+    except knowledge_base.KnowledgeBaseError as e:
+        raise SystemExit(str(e)) from None
 
 
 def chat(agent: ResearchAgent | None = None, read=input) -> None:
