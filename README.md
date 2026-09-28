@@ -120,6 +120,20 @@ uv run finsight traces 719df4fc     # one question, step by step
 Independently, AWS records every Bedrock model call (who, when, model, tokens, request and
 response) in CloudWatch Logs: `/finsight/bedrock-invocations`, 30-day retention. See `infra/iam/`.
 
+## Web API (AgentCore Runtime contract)
+
+`src/finsight/api.py` serves FinSight over HTTP: `GET /ping`, `GET /info`, and
+`POST /invocations` (`{"prompt": ..., "action": "chat" | "note" | "reset"}`), streaming
+agent events as server-sent events. Sessions are keyed by the
+`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header.
+
+```bash
+uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080   # local only (no auth)
+```
+
+The `Dockerfile` builds the linux/arm64 image AgentCore requires (no UI libraries, no
+secrets, non-root user); CI builds and health-checks it on every pull request.
+
 ## Development checks
 
 ```bash
@@ -143,6 +157,7 @@ src/finsight/   # application code
   llm.py        # simplest single Claude call (ask)
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)
+  api.py        # FastAPI web API (AgentCore Runtime contract, SSE streaming)
   charts.py     # Altair charts for research notes
   tools.py      # tool definitions Claude can call
   sec.py        # SEC EDGAR API client

@@ -14,6 +14,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - `uv run ruff check --fix . && uv run ruff format .` - lint and format
 - `uv run pre-commit run --all-files` - run all commit hooks
 - `uv run finsight ui` - Streamlit app on localhost:8501 (config in .streamlit/config.toml)
+- `uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080` - web API locally
 - `uv add <pkg>` / `uv add --dev <pkg>` - add a dependency (never edit versions by hand)
 
 ## Conventions
@@ -55,4 +56,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Tracing: tracing.py (OpenTelemetry, gen_ai.* attributes). Spans in the agent are created
   with child_span() and an explicit parent, never made current (send() is a generator that
   yields mid-span). tests/conftest.py turns tracing off; tests use InMemorySpanExporter
+- API: api.py follows the AgentCore Runtime HTTP contract (port 8080, /ping, /invocations SSE,
+  session header). Auth is enforced by AgentCore (Cognito JWT), not in the app. UI libraries live
+  in the `ui` dependency group, excluded from the arm64 Docker image (`--no-default-groups`)
 - Never present outputs as financial advice

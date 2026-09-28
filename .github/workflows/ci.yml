@@ -48,3 +48,27 @@ jobs:
         run: uv sync --locked
       - name: Run pytest
         run: uv run pytest
+
+  container:
+    name: Container (arm64)
+    # AgentCore Runtime requires linux/arm64; build on a native ARM runner (free for
+    # public repositories) and smoke-test the image before anything is deployed.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build --platform linux/arm64 -t finsight-api:ci .
+      - name: Start container
+        run: docker run -d --name finsight -p 8080:8080 finsight-api:ci
+      - name: Health check (/ping)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf localhost:8080/ping | grep -q Healthy; then
+              curl -s localhost:8080/ping; exit 0
+            fi
+            sleep 1
+          done
+          docker logs finsight; exit 1
+      - name: Image size
+        run: docker image ls finsight-api:ci --format '{{.Repository}}:{{.Tag}} {{.Size}}'
