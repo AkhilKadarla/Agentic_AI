@@ -19,3 +19,4 @@ def default_provider(monkeypatch):
     monkeypatch.setattr(config, "KB_ID", None)  # no Knowledge Base unless a test adds one
     monkeypatch.setattr(config, "KB_DATA_SOURCE_ID", None)
     monkeypatch.setattr(config, "FILINGS_BUCKET", None)
+    monkeypatch.setattr(config, "TRACING", False)  # tests never write trace files

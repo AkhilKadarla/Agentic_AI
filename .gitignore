@@ -34,3 +34,6 @@ reports/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local traces (may contain questions and answers)
+logs/

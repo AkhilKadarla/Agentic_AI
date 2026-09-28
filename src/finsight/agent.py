@@ -5,10 +5,13 @@ tool calls, tool results, and a final summary). Any interface can consume the sa
 the terminal CLI and the Streamlit web UI.
 """
 
+import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import anthropic
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 from pydantic import ValidationError
 
 from finsight import config
@@ -25,6 +28,7 @@ from finsight.guardrail import (
 from finsight.llm import SYSTEM_PROMPT
 from finsight.notes import NOTE_INSTRUCTIONS, ResearchNote
 from finsight.providers import (
+    active_provider,
     automatic_caching,
     make_client,
     model_id,
@@ -32,6 +36,7 @@ from finsight.providers import (
     provider_options,
 )
 from finsight.tools import available_tools, run_tool
+from finsight.tracing import PROVIDER_NAMES, child_span, content, set_attributes, tracer
 
 MAX_TURNS = 10
 CACHE = {"type": "ephemeral"}  # prompt-cache marker (5-minute lifetime)
@@ -156,13 +161,68 @@ class ResearchAgent:
         self.sources = []
 
     def send(self, user_message: str) -> Iterator[Event]:
-        """Send one user message and run the agent loop, yielding events as they happen."""
-        usage = Usage()
+        """Send one user message and run the agent loop, yielding events as they happen.
+
+        The whole exchange is recorded as one trace (see tracing.py): a root span for the
+        question, with child spans for guardrail checks, model calls and tool calls.
+        """
+        t = tracer()
+        root = t.start_span(
+            "research",
+            attributes={
+                "gen_ai.operation.name": "invoke_agent",
+                "gen_ai.agent.name": "finsight",
+                "gen_ai.provider.name": PROVIDER_NAMES[active_provider()],
+                "gen_ai.request.model": model_id(),
+            },
+        )
+        set_attributes(root, finsight__question=content(user_message))
+        usage, outcome = Usage(), "incomplete"
+        try:
+            for event in self._run(user_message, usage, t, trace.set_span_in_context(root)):
+                if isinstance(event, GuardrailBlocked):
+                    outcome = "blocked"
+                elif isinstance(event, Done):
+                    if outcome != "blocked":
+                        outcome = (
+                            "answered" if event.stop_reason == "end_turn" else event.stop_reason
+                        )
+                    set_attributes(root, finsight__answer=content(event.text))
+                yield event
+        except Exception as e:
+            outcome = "error"
+            root.record_exception(e)
+            root.set_status(Status(StatusCode.ERROR, str(e)[:200]))
+            raise
+        finally:
+            set_attributes(
+                root,
+                gen_ai__usage__input_tokens=usage.input_tokens,
+                gen_ai__usage__output_tokens=usage.output_tokens,
+                finsight__cache_read_tokens=usage.cache_read_tokens,
+                finsight__cache_write_tokens=usage.cache_write_tokens,
+                finsight__cost_usd=usage.cost_usd(),
+                finsight__outcome=outcome,
+            )
+            root.end()
+
+    def _run(self, user_message: str, usage: Usage, t, parent) -> Iterator[Event]:
+        """The agent loop itself (send() wraps it in the trace)."""
         if self.guardrail:
-            try:
-                verdict = self.guardrail.check_input(user_message)
-            except GuardrailUnavailable:
-                verdict = Verdict(True, FAIL_CLOSED_MESSAGE.format(profile=config.AWS_PROFILE))
+            with child_span(t, parent, "guardrail.input") as span:
+                try:
+                    verdict = self.guardrail.check_input(user_message)
+                except GuardrailUnavailable:
+                    verdict = Verdict(
+                        True,
+                        FAIL_CLOSED_MESSAGE.format(profile=config.AWS_PROFILE),
+                        ["unavailable"],
+                    )
+                set_attributes(
+                    span,
+                    finsight__guardrail__result="blocked" if verdict.blocked else "passed",
+                    finsight__guardrail__reasons=", ".join(verdict.reasons) or None,
+                )
             if verdict.blocked:
                 # Blocked questions never reach Claude and are not added to memory.
                 yield GuardrailBlocked(verdict.message, verdict.reasons)
@@ -171,12 +231,32 @@ class ResearchAgent:
 
         self.messages.append({"role": "user", "content": user_message})
 
-        for _turn in range(self.max_turns):
-            with self._stream() as stream:
-                for event in stream:
-                    if event.type == "text":  # a chunk of answer text
-                        yield TextDelta(event.text)
-                response = stream.get_final_message()
+        for turn in range(self.max_turns):
+            with child_span(
+                t,
+                parent,
+                f"chat {model_id()}",
+                gen_ai__operation__name="chat",
+                gen_ai__request__model=model_id(),
+                finsight__turn=turn + 1,
+            ) as span:
+                with self._stream() as stream:
+                    for event in stream:
+                        if event.type == "text":  # a chunk of answer text
+                            yield TextDelta(event.text)
+                    response = stream.get_final_message()
+                call = Usage()
+                call.add(response.usage)
+                set_attributes(
+                    span,
+                    gen_ai__response__model=response.model,
+                    gen_ai__response__finish_reasons=[response.stop_reason or ""],
+                    gen_ai__usage__input_tokens=call.input_tokens,
+                    gen_ai__usage__output_tokens=call.output_tokens,
+                    finsight__cache_read_tokens=call.cache_read_tokens,
+                    finsight__cache_write_tokens=call.cache_write_tokens,
+                    finsight__cost_usd=call.cost_usd(),
+                )
             usage.add(response.usage)
             self.total_usage.add(response.usage)
 
@@ -186,7 +266,10 @@ class ResearchAgent:
             if response.stop_reason != "tool_use":
                 answer = self._final_text(response)
                 if self.guardrail:
-                    yield self._review(answer, user_message)
+                    with child_span(t, parent, "guardrail.output") as span:
+                        report = self._review(answer, user_message)
+                        set_attributes(span, **_review_attributes(report))
+                    yield report
                 yield Done(answer, usage, response.model, response.stop_reason)
                 return
 
@@ -195,7 +278,21 @@ class ResearchAgent:
                 if block.type != "tool_use":
                     continue
                 yield ToolCall(block.name, block.input)
-                result, is_error = self.tool_runner(block.name, block.input)
+                with child_span(
+                    t,
+                    parent,
+                    f"execute_tool {block.name}",
+                    gen_ai__operation__name="execute_tool",
+                    gen_ai__tool__name=block.name,
+                    gen_ai__tool__call__id=block.id,
+                    finsight__tool__arguments=json.dumps(block.input),
+                ) as span:
+                    result, is_error = self.tool_runner(block.name, block.input)
+                    set_attributes(
+                        span,
+                        finsight__tool__is_error=is_error,
+                        finsight__tool__result_chars=len(result),
+                    )
                 yield ToolResult(block.name, is_error)
                 if self.guardrail and not is_error:
                     self.sources.append(readable_source(block.name, result))
@@ -232,6 +329,19 @@ class ResearchAgent:
         return GuardrailReport(output=output, grounding=grounding)
 
     def write_note(self) -> tuple[ResearchNote, Usage]:
+        with tracer().start_as_current_span("write_note") as span:
+            note, usage = self._write_note()
+            set_attributes(
+                span,
+                gen_ai__request__model=model_id(),
+                gen_ai__usage__input_tokens=usage.input_tokens,
+                gen_ai__usage__output_tokens=usage.output_tokens,
+                finsight__cost_usd=usage.cost_usd(),
+                finsight__note__metrics=len(note.key_metrics),
+            )
+            return note, usage
+
+    def _write_note(self) -> tuple[ResearchNote, Usage]:
         """Turn the research conversation so far into a structured, validated ResearchNote.
 
         The request is the same conversation plus one instruction, so the cached prefix is
@@ -320,3 +430,17 @@ def _with_cache_breakpoint(messages: list[dict]) -> list[dict]:
         blocks = [b if isinstance(b, dict) else b.model_dump(exclude_none=True) for b in content]
     blocks[-1] = {**blocks[-1], "cache_control": CACHE}
     return [*earlier, {**last, "content": blocks}]
+
+
+def _review_attributes(report: GuardrailReport) -> dict:
+    if report.error:
+        return {"finsight__guardrail__result": "unavailable"}
+    if report.output and report.output.blocked:
+        reasons = ", ".join(report.output.reasons) or None
+        return {"finsight__guardrail__result": "retracted", "finsight__guardrail__reasons": reasons}
+    grounding = report.grounding
+    return {
+        "finsight__guardrail__result": "flagged" if grounding and grounding.flagged else "passed",
+        "finsight__grounding__checked": grounding.checked if grounding else 0,
+        "finsight__grounding__flagged": len(grounding.flagged) if grounding else 0,
+    }

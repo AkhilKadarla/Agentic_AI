@@ -15,7 +15,7 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 4 - Agent upgrades:** streaming + conversation memory, structured research notes
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
 - [x] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Guardrails, Knowledge Base (RAG) over 10-K text
-- [ ] **Phase 7 - Evals & observability:** number-accuracy eval ✅ (baseline 100%), tracing
+- [ ] **Phase 7 - Evals & observability:** number-accuracy eval ✅ (baseline 100%), OpenTelemetry tracing ✅
 - [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
 - [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
 
@@ -106,6 +106,17 @@ uv run python -m evals.number_accuracy.run_eval --report
 Baseline (Sonnet 4.6 on Bedrock): **50/50 correct, 50/50 from fetched data**. Results and
 transcripts: `.claude/hillclimb/number_accuracy/baseline/`.
 
+## Observability
+
+Every question is recorded as an OpenTelemetry trace: a span per guardrail check, model
+call and tool call, with timing, tokens and cost (GenAI semantic conventions). Traces are
+written to `logs/traces/<date>.jsonl` (git-ignored, deleted after 30 days).
+
+```bash
+uv run finsight traces              # recent questions: time, cost, tools, outcome
+uv run finsight traces 719df4fc     # one question, step by step
+```
+
 ## Development checks
 
 ```bash
@@ -125,6 +136,7 @@ src/finsight/   # application code
   guardrail.py  # Bedrock Guardrails: input/output checks, grounding per paragraph
   filings.py    # extract Risk Factors / MD&A text from 10-K HTML
   knowledge_base.py  # Bedrock Knowledge Base: upload with labels, sync, search
+  tracing.py    # OpenTelemetry spans, local JSONL exporter, retention, trace viewer
   llm.py        # simplest single Claude call (ask)
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)
