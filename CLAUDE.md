@@ -15,7 +15,7 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - `uv run pre-commit run --all-files` - run all commit hooks
 - `uv run finsight ui` - Streamlit app on localhost:8501 (config in .streamlit/config.toml)
 - `uv run finsight remote` - log in (Cognito, PKCE) and chat with the deployed agent
-- `uv run finsight mcp` - MCP server over stdio (Claude Code: `claude mcp add finsight -- uv run --directory <repo> finsight mcp`)
+- `uv run finsight mcp` - MCP server over stdio; `.mcp.json` registers it for Claude Code in this repo
 - `FINSIGHT_UI_BACKEND=deployed uv run finsight ui` - web UI with login, using the deployed agent
 - `uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080` - web API locally
 - `uv add <pkg>` / `uv add --dev <pkg>` - add a dependency (never edit versions by hand)

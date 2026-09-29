@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "finsight": {
+      "command": "uv",
+      "args": ["run", "finsight", "mcp"]
+    }
+  }
+}
