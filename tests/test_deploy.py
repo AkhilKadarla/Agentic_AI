@@ -77,6 +77,8 @@ def test_request_requires_login_and_passes_only_app_settings():
     env = request["environmentVariables"]
     assert env["FINSIGHT_PROVIDER"] == "bedrock"
     assert env["FINSIGHT_GUARDRAIL_VERSION"] == "3"
+    assert env["FINSIGHT_TRACE_EXPORTER"] == "otel"  # spans to CloudWatch via ADOT
+    assert env["FINSIGHT_TRACE_CONTENT"] == "off"  # no question/answer text in traces
     assert "GITHUB_TOKEN" not in env  # nothing else from the CI environment leaks in
     assert "RUNTIME_ROLE_ARN" not in env
 

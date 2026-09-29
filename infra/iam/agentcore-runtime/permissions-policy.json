@@ -4,7 +4,10 @@
     {
       "Sid": "PullFinSightImage",
       "Effect": "Allow",
-      "Action": ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
+      "Action": [
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
       "Resource": "arn:aws:ecr:us-east-1:ACCOUNT_ID:repository/finsight"
     },
     {
@@ -16,14 +19,26 @@
     {
       "Sid": "RuntimeLogGroups",
       "Effect": "Allow",
-      "Action": ["logs:CreateLogGroup", "logs:DescribeLogStreams"],
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DescribeLogStreams"
+      ],
       "Resource": "arn:aws:logs:us-east-1:ACCOUNT_ID:log-group:/aws/bedrock-agentcore/runtimes/finsight-*"
     },
     {
       "Sid": "RuntimeLogStreams",
       "Effect": "Allow",
-      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
       "Resource": "arn:aws:logs:us-east-1:ACCOUNT_ID:log-group:/aws/bedrock-agentcore/runtimes/finsight-*:log-stream:*"
+    },
+    {
+      "Sid": "SpansIntoOwnLogGroup",
+      "Effect": "Allow",
+      "Action": "logs:PutResourcePolicy",
+      "Resource": "arn:aws:logs:us-east-1:ACCOUNT_ID:log-group:/aws/bedrock-agentcore/runtimes/finsight-*"
     },
     {
       "Sid": "DescribeLogGroups",
@@ -47,18 +62,28 @@
       "Effect": "Allow",
       "Action": "cloudwatch:PutMetricData",
       "Resource": "*",
-      "Condition": { "StringEquals": { "cloudwatch:namespace": "bedrock-agentcore" } }
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "bedrock-agentcore"
+        }
+      }
     },
     {
       "Sid": "InvokeClaudeViaUsProfile",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
       "Resource": "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/us.anthropic.claude-sonnet-4-6"
     },
     {
       "Sid": "ModelOnlyThroughUsProfile",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
       "Resource": [
         "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6",
         "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6",

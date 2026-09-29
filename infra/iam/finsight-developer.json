@@ -59,6 +59,22 @@
         "arn:aws:logs:us-east-1:*:log-group:/finsight/*",
         "arn:aws:logs:us-east-1:*:log-group:/finsight/*:log-stream:*"
       ]
+    },
+    {
+      "Sid": "ReadDeployedAppLogsAndTraces",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:StartQuery",
+        "logs:StopQuery",
+        "logs:PutRetentionPolicy"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:*:log-group:/aws/bedrock-agentcore/runtimes/finsight-*",
+        "arn:aws:logs:us-east-1:*:log-group:/aws/bedrock-agentcore/runtimes/finsight-*:log-stream:*"
+      ]
     }
   ]
 }
