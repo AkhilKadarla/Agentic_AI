@@ -180,3 +180,46 @@ def test_write_note_without_research_raises_value_error():
     agent = agent_with(lambda r: httpx.Response(400, json={"error": "Nothing to summarize yet"}))
     with pytest.raises(ValueError, match="Nothing to summarize"):
         agent.write_note()
+
+
+def test_web_login_verifier_is_used_once(monkeypatch):
+    monkeypatch.setattr(remote, "PENDING_LOGINS", {})
+    url = remote.start_web_login("login.example.com", "client1")
+    state = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))["state"]
+    verifier = remote.PENDING_LOGINS[state]
+    used = []
+    monkeypatch.setattr(remote, "exchange_code", lambda http, d, c, code, v: used.append(v) or "T")
+
+    assert remote.finish_web_login("login.example.com", "client1", {"code": "C", "state": state})
+    assert used == [verifier]
+    with pytest.raises(remote.LoginError, match="already used"):
+        remote.finish_web_login("login.example.com", "client1", {"code": "C", "state": state})
+    with pytest.raises(remote.LoginError, match="access_denied"):
+        remote.finish_web_login("login.example.com", "client1", {"error": "access_denied"})
+
+
+def test_pending_logins_are_capped(monkeypatch):
+    monkeypatch.setattr(remote, "PENDING_LOGINS", {})
+    for _ in range(remote.MAX_PENDING + 5):
+        remote.start_web_login("login.example.com", "client1")
+    assert len(remote.PENDING_LOGINS) == remote.MAX_PENDING
+
+
+def test_logout_returns_to_the_app():
+    url = remote.logout_url("login.example.com", "client1")
+    params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+    assert url.startswith("https://login.example.com/logout?")
+    assert params == {"client_id": "client1", "logout_uri": "http://localhost:8501/"}
+
+
+def test_model_is_remembered_for_cost_estimates():
+    done = {
+        "type": "done",
+        "text": "",
+        "model": "claude-sonnet-4-6",
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 1},
+    }
+    agent = agent_with(lambda r: httpx.Response(200, text=sse(done)))
+    list(agent.send("hi"))
+    assert agent.model == "claude-sonnet-4-6"

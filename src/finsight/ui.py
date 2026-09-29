@@ -3,6 +3,10 @@
 Streamlit re-runs this whole script top to bottom on every interaction (a click, a
 message). Anything that must survive between runs - the agent and its memory, the chat
 as displayed, the latest note - lives in `st.session_state`.
+
+FINSIGHT_UI_BACKEND=deployed: the page first asks you to log in (Cognito, PKCE), then chats
+with the agent on AgentCore Runtime through a RemoteAgent. The access token is kept in
+session_state, which lives on the Streamlit server, so it never reaches the browser.
 """
 
 import json
@@ -10,7 +14,7 @@ import json
 import anthropic
 import streamlit as st
 
-from finsight import config
+from finsight import config, remote
 from finsight.agent import (
     Done,
     GuardrailBlocked,
@@ -31,11 +35,57 @@ EXAMPLES = [
 ]
 
 
+def deployed() -> bool:
+    return config.UI_BACKEND == "deployed"
+
+
 def init_state() -> None:
-    if "agent" not in st.session_state:
+    if "agent" not in st.session_state and not deployed():
         st.session_state.agent = ResearchAgent()
     st.session_state.setdefault("chat", [])  # what we show: {"role", "text", "tools"}
     st.session_state.setdefault("note", None)
+
+
+def login_page() -> None:
+    """Deployed mode, not logged in yet: finish a login coming back from Cognito, or offer one."""
+    missing = [
+        name
+        for name, value in [
+            ("FINSIGHT_COGNITO_DOMAIN", config.COGNITO_DOMAIN),
+            ("FINSIGHT_COGNITO_CLIENT_ID", config.COGNITO_CLIENT_ID),
+            ("FINSIGHT_RUNTIME_ARN", config.RUNTIME_ARN),
+        ]
+        if not value
+    ]
+    if missing:
+        st.error(f"Deployed mode needs these settings in .env: {', '.join(missing)}")
+        return
+
+    params = st.query_params.to_dict()
+    if "code" in params or "error" in params:
+        st.query_params.clear()  # the one-time code shouldn't linger in the address bar
+        try:
+            token = remote.finish_web_login(config.COGNITO_DOMAIN, config.COGNITO_CLIENT_ID, params)
+        except remote.LoginError as e:
+            st.error(str(e))
+        else:
+            st.session_state.agent = remote.RemoteAgent(token, config.RUNTIME_ARN)
+            st.rerun()
+
+    if "login_url" not in st.session_state:  # one pending login per browser session
+        st.session_state.login_url = remote.start_web_login(
+            config.COGNITO_DOMAIN, config.COGNITO_CLIENT_ID
+        )
+    st.title("📊 FinSight")
+    st.write("AI research agent over live SEC EDGAR data. Sign in to use the deployed agent.")
+    # A plain link (same tab): Cognito's page asks for your password and authenticator code,
+    # then sends the browser back here with a one-time code.
+    st.markdown(
+        f'<a href="{st.session_state.login_url}" target="_self">🔐 Log in with your FinSight '
+        "account</a>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Invite-only · multi-factor authentication required")
 
 
 def tool_label(name: str, tool_input: dict) -> str:
@@ -140,6 +190,11 @@ def run_agent(prompt: str) -> None:
         except AWS_CREDENTIAL_ERRORS:
             text += f"\n\n**{AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE)}**"
             answer_box.markdown(text)
+        except remote.RemoteError as e:
+            text += f"\n\n**{e}**"
+            answer_box.markdown(text)
+            if isinstance(e, remote.LoginExpired):
+                del st.session_state["agent"]  # back to the login page on the next run
         if guard:
             show_guard(guard)
     st.session_state.chat.append(
@@ -207,7 +262,7 @@ def sidebar() -> None:
                     note, _usage = agent.write_note()
                     st.session_state.note = note
                     save_note(note)
-                except (ValueError, anthropic.APIError) as e:
+                except (ValueError, anthropic.APIError, remote.RemoteError) as e:
                     st.error(str(e))
                 except AWS_CREDENTIAL_ERRORS:
                     st.error(AWS_LOGIN_HINT.format(profile=config.AWS_PROFILE))
@@ -217,12 +272,19 @@ def sidebar() -> None:
             st.session_state.note = None
             st.rerun()
 
+        if deployed():
+            # Logging out at Cognito ends its login session too; the page reload that follows
+            # starts a fresh Streamlit session, which drops this one's token.
+            logout = remote.logout_url(config.COGNITO_DOMAIN, config.COGNITO_CLIENT_ID)
+            st.markdown(f'<a href="{logout}" target="_self">Log out</a>', unsafe_allow_html=True)
+
         st.divider()
         usage = agent.total_usage
-        cost = usage.cost_usd()
+        cost = usage.cost_usd(getattr(agent, "model", None) or None)
         st.metric("Session cost (est.)", f"${cost:.3f}" if cost is not None else "n/a")
+        where = "deployed on AgentCore Runtime" if deployed() else describe()
         st.caption(
-            f"Provider / model: `{describe()}`  \n"
+            f"Agent: `{where}`  \n"
             f"Input: {usage.input_tokens:,} new · {usage.cache_write_tokens:,} cache-write · "
             f"{usage.cache_read_tokens:,} cache-read  \n"
             f"Output: {usage.output_tokens:,}"
@@ -232,6 +294,9 @@ def sidebar() -> None:
 def main() -> None:
     st.set_page_config(page_title="FinSight", page_icon="📊", layout="wide")
     init_state()
+    if "agent" not in st.session_state:  # deployed mode and not logged in yet
+        login_page()
+        return
     sidebar()
 
     chat_tab, note_tab = st.tabs(["💬 Research chat", "📝 Research note"])

@@ -190,3 +190,82 @@ def test_flagged_paragraphs_are_listed_for_review() -> None:
     assert guard_info["status"] == "flagged"
     assert guard_info["flagged"][0][1] == 0.04
     assert "1 of 1 paragraphs" in app.expander[-1].label
+
+
+# ---------- deployed mode (FINSIGHT_UI_BACKEND=deployed): Cognito login, RemoteAgent ----------
+
+
+@pytest.fixture
+def deployed_mode(monkeypatch):
+    from finsight import config, remote
+
+    monkeypatch.setattr(config, "UI_BACKEND", "deployed")
+    monkeypatch.setattr(config, "COGNITO_DOMAIN", "login.example.com")
+    monkeypatch.setattr(config, "COGNITO_CLIENT_ID", "client1")
+    monkeypatch.setattr(config, "RUNTIME_ARN", "arn:aws:bedrock-agentcore:us-east-1:1:runtime/x")
+    monkeypatch.setattr(remote, "PENDING_LOGINS", {})
+    return remote
+
+
+def test_deployed_mode_asks_to_log_in_first(deployed_mode) -> None:
+    app = AppTest.from_file(APP, default_timeout=30).run()
+
+    assert not app.exception
+    assert not app.chat_input  # no chat until logged in
+    login_link = next(m.value for m in app.markdown if "Log in" in m.value)
+    assert "https://login.example.com/oauth2/authorize?" in login_link
+    assert "code_challenge_method=S256" in login_link
+    assert len(deployed_mode.PENDING_LOGINS) == 1  # the verifier waits server-side
+
+
+def test_returning_from_cognito_logs_in(deployed_mode, monkeypatch) -> None:
+    app = AppTest.from_file(APP, default_timeout=30).run()
+    ((state, verifier),) = deployed_mode.PENDING_LOGINS.items()
+    seen = {}
+
+    def fake_exchange(http, domain, client_id, code, code_verifier):
+        seen.update(code=code, verifier=code_verifier)
+        return "ACCESS_TOKEN"
+
+    monkeypatch.setattr(deployed_mode, "exchange_code", fake_exchange)
+    app.query_params["code"] = "ONE_TIME_CODE"
+    app.query_params["state"] = state
+    app.run()
+
+    assert not app.exception
+    agent = app.session_state["agent"]
+    assert isinstance(agent, deployed_mode.RemoteAgent)
+    assert agent.token == "ACCESS_TOKEN"
+    assert seen == {"code": "ONE_TIME_CODE", "verifier": verifier}
+    assert app.chat_input  # the chat is available now
+    assert deployed_mode.PENDING_LOGINS == {}  # a login link works only once
+
+
+def test_unknown_or_reused_login_is_refused(deployed_mode) -> None:
+    app = AppTest.from_file(APP, default_timeout=30)
+    app.query_params["code"] = "CODE"
+    app.query_params["state"] = "not-a-login-we-started"
+    app.run()
+
+    assert not app.exception
+    assert "expired or was already used" in app.error[0].value
+    assert "agent" not in app.session_state
+
+
+def test_expired_login_returns_to_the_login_page(deployed_mode) -> None:
+    class ExpiredAgent:
+        total_usage = Usage()
+        model = ""
+
+        def send(self, prompt):
+            raise deployed_mode.LoginExpired("login expired - log in again")
+            yield  # a generator, like the real send()
+
+    app = AppTest.from_file(APP, default_timeout=30)
+    app.session_state["agent"] = ExpiredAgent()
+    app.run()
+    app.chat_input[0].set_value("Apple revenue?").run()
+
+    assert not app.exception
+    assert "login expired" in app.session_state["chat"][-1]["text"]
+    assert "agent" not in app.session_state
