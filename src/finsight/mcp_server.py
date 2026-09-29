@@ -34,6 +34,9 @@ DESCRIPTIONS = {tool["name"]: tool["description"] for tool in [*TOOLS, SEARCH_FI
 # Tells clients these tools only read data (safe to call without asking) and reach the
 # outside world (SEC EDGAR, the Knowledge Base).
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
+# Results go back as the plain JSON text the agent's Claude sees (not re-wrapped as
+# {"result": "<json string>"}, which the SDK does for str-returning tools by default).
+TOOL_OPTIONS = {"annotations": READ_ONLY, "structured_output": False}
 
 INSTRUCTIONS = (
     "FinSight gives you US public-company data from SEC EDGAR: recent filings, reported "
@@ -58,7 +61,7 @@ def _run(name: str, **tool_input) -> str:
 def build_server() -> MCPServer:
     server = MCPServer("finsight", title="FinSight", version=__version__, instructions=INSTRUCTIONS)
 
-    @server.tool(description=DESCRIPTIONS["get_company_filings"], annotations=READ_ONLY)
+    @server.tool(description=DESCRIPTIONS["get_company_filings"], **TOOL_OPTIONS)
     def get_company_filings(
         ticker: Ticker,
         form_type: Annotated[
@@ -68,7 +71,7 @@ def build_server() -> MCPServer:
     ) -> str:
         return _run("get_company_filings", ticker=ticker, form_type=form_type, limit=limit)
 
-    @server.tool(description=DESCRIPTIONS["get_financial_facts"], annotations=READ_ONLY)
+    @server.tool(description=DESCRIPTIONS["get_financial_facts"], **TOOL_OPTIONS)
     def get_financial_facts(
         ticker: Ticker,
         metric: Metric,
@@ -78,7 +81,7 @@ def build_server() -> MCPServer:
 
     if config.KB_ID:  # same rule as the agent: offer 10-K search only when a KB exists
 
-        @server.tool(description=DESCRIPTIONS["search_filings"], annotations=READ_ONLY)
+        @server.tool(description=DESCRIPTIONS["search_filings"], **TOOL_OPTIONS)
         def search_filings(
             ticker: Ticker,
             query: Annotated[str, Field(description="What to look for, in plain words")],

@@ -87,6 +87,7 @@ def test_calls_run_the_agents_tool_code(fake_tools):
 
     assert not result.is_error
     assert json.loads(result.content[0].text) == {"tool": "get_financial_facts", "ticker": "AAPL"}
+    assert result.structured_content is None  # plain JSON text, not wrapped in {"result": ...}
     assert fake_tools == [
         ("get_financial_facts", {"ticker": "AAPL", "metric": "revenue", "years": 5})
     ]
