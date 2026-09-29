@@ -101,7 +101,7 @@ it streams, with either provider (it needs an AWS login):
 
 ```bash
 FINSIGHT_GUARDRAIL_ID=<your guardrail id>
-FINSIGHT_GUARDRAIL_VERSION=3          # pin a published version, never DRAFT in real use
+FINSIGHT_GUARDRAIL_VERSION=4          # pin a published version, never DRAFT in real use
 ```
 
 Before publishing a new guardrail version, run the regression suite against the draft:
