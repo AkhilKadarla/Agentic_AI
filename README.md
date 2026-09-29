@@ -2,9 +2,41 @@
 
 [![CI](https://github.com/AkhilKadarla/Agentic_AI/actions/workflows/ci.yml/badge.svg)](https://github.com/AkhilKadarla/Agentic_AI/actions/workflows/ci.yml)
 
-An AI research analyst agent for the finance industry. FinSight reads public company
-filings (SEC EDGAR), financial statements and market data, then produces analyst-style
-research notes, built step by step to learn modern agentic AI engineering.
+An AI research analyst agent for the finance industry. Ask it *"Is Costco converting its
+earnings into free cash flow?"* and it pulls reported figures from SEC filings, reads the
+company's 10-K, shows its calculations, and writes a structured research note with charts.
+Built step by step to learn agentic AI engineering the way a financial firm would run it.
+
+## Highlights
+
+- **Agent:** Claude tool-use loop in Python with streaming, conversation memory and
+  structured outputs (Pydantic research notes)
+- **RAG:** Amazon Bedrock Knowledge Base (S3 Vectors) over 10-K Risk Factors and MD&A,
+  filtered by company and section
+- **Guardrails:** Amazon Bedrock Guardrails check every question, and every answer paragraph
+  is checked for grounding in the fetched data; fails closed
+- **Evals:** 25-case number-accuracy suite (programmatic grading + LLM judge), 50/50 passing
+- **Observability:** OpenTelemetry traces (local and CloudWatch) and an audit log of every
+  model call
+- **Deployment:** FastAPI + Docker on **Amazon Bedrock AgentCore Runtime**, Cognito login with
+  MFA, least-privilege IAM as code, keyless GitHub Actions deploys (OIDC) with approval
+- **MCP:** the SEC tools also run as an MCP server for Claude Code and other MCP clients
+- **Quality:** 260+ tests (no network), lint and container checks in CI on every pull request
+
+```mermaid
+flowchart LR
+    U[User] -->|CLI / Streamlit UI| A
+    U -->|Cognito login, MFA| RT
+    subgraph AWS
+        RT[AgentCore Runtime<br/>FastAPI container] --> A
+        A[Research agent<br/>Claude tool-use loop] --> G[Bedrock Guardrails]
+        A --> M[Claude on Bedrock<br/>US-only profile]
+        A --> KB[Knowledge Base<br/>10-K text]
+        A -.-> O[CloudWatch traces<br/>+ audit log]
+    end
+    A --> SEC[SEC EDGAR APIs]
+    C[Claude Code] -->|MCP| T[FinSight MCP server] --> SEC
+```
 
 ## Roadmap
 
@@ -16,8 +48,9 @@ research notes, built step by step to learn modern agentic AI engineering.
 - [x] **Phase 5 - Interactive UI:** Streamlit chat app with live tool calls and charts
 - [x] **Phase 6 - AWS Bedrock:** Claude on Bedrock, Guardrails, Knowledge Base (RAG) over 10-K text
 - [x] **Phase 7 - Evals & observability:** number-accuracy eval, OpenTelemetry tracing, Bedrock invocation logging
-- [ ] **Phase 8 - Deploy:** FastAPI + Docker on AWS, keyless CI/CD via OIDC
-- [ ] **Phase 9 - MCP server:** share the SEC tools with any MCP-compatible agent
+- [x] **Phase 8 - Deploy:** FastAPI + Docker on Bedrock AgentCore Runtime, Cognito login (MFA),
+  keyless CI/CD via OIDC with approval, CloudWatch traces
+- [x] **Phase 9 - MCP server:** the SEC tools for any MCP-compatible agent (e.g. Claude Code)
 
 ## Quickstart
 
@@ -134,6 +167,37 @@ uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080   # local only (no 
 The `Dockerfile` builds the linux/arm64 image AgentCore requires (no UI libraries, no
 secrets, non-root user); CI builds and health-checks it on every pull request.
 
+## Deployment (Amazon Bedrock AgentCore Runtime)
+
+After CI passes on `main`, `.github/workflows/deploy.yml` waits for approval in the
+`production` environment, logs in to AWS with OIDC (no stored keys), pushes the image to ECR
+(immutable tags) and creates or updates the AgentCore runtime (`deploy/agentcore.py`).
+
+- **Login required:** AgentCore accepts only Cognito access tokens from FinSight's app client
+  (invite-only user pool, MFA required); the deploy role can't create a runtime without it
+- **Least privilege:** the app's role can only read (Claude via the US-only profile, the
+  guardrail, the Knowledge Base); IAM policies live in `infra/` as code
+- **Traces** go to CloudWatch without question/answer text; the Bedrock invocation log is the
+  audited record of content
+
+Use the deployed agent from the terminal or the web UI (logs in with PKCE in your browser):
+
+```bash
+uv run finsight remote                            # chat with the deployed agent
+FINSIGHT_UI_BACKEND=deployed uv run finsight ui   # web UI with login
+```
+
+## MCP server
+
+FinSight's SEC tools (`get_company_filings`, `get_financial_facts`, `search_filings`), a
+metrics resource and a research prompt are available to any MCP client. In this repo,
+`.mcp.json` registers the server for Claude Code automatically; just ask, e.g. *"Using
+finsight, how has Apple's revenue changed over 3 years?"*
+
+```bash
+uv run finsight mcp      # the stdio server that MCP clients start
+```
+
 ## Development checks
 
 ```bash
@@ -158,13 +222,17 @@ src/finsight/   # application code
   notes.py      # ResearchNote schema (Pydantic), Markdown rendering, saving
   ui.py         # Streamlit web app (renders the agent's events)
   api.py        # FastAPI web API (AgentCore Runtime contract, SSE streaming)
+  remote.py     # PKCE login + client for the deployed agent
+  mcp_server.py # the SEC tools as an MCP server
   charts.py     # Altair charts for research notes
   tools.py      # tool definitions Claude can call
   sec.py        # SEC EDGAR API client
   config.py     # settings loaded from .env
 tests/          # automated tests (no network, no API calls)
+evals/          # number-accuracy eval suite
+deploy/         # AgentCore create-or-update script (run by GitHub Actions)
 scripts/        # manual live checks (e.g. guardrail regression suite)
-infra/          # infrastructure as code (IAM policies)
+infra/          # infrastructure as code (IAM policies, Cognito, ECR)
 ```
 
 ## License
