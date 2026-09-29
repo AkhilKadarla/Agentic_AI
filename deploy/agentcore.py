@@ -71,8 +71,11 @@ def runtime_request(image: str, env: dict[str, str]) -> dict:
         "lifecycleConfiguration": {"idleRuntimeSessionTimeout": 900, "maxLifetime": 28800},
         "environmentVariables": {
             "FINSIGHT_PROVIDER": "bedrock",
-            # Trace files would vanish with each micro-VM; CloudWatch tracing comes in 8.6.
-            "FINSIGHT_TRACING": "off",
+            # FinSight's spans go to CloudWatch via ADOT (see Dockerfile). Question/answer text
+            # stays out of traces: the Bedrock invocation log is the audited record of content.
+            "FINSIGHT_TRACING": "on",
+            "FINSIGHT_TRACE_EXPORTER": "otel",
+            "FINSIGHT_TRACE_CONTENT": "off",
             **{name: env[name] for name in APP_SETTINGS},
         },
     }

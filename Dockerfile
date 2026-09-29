@@ -12,12 +12,13 @@ ENV UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 # Dependencies first (cached between builds unless the lockfile changes). No dev tools
-# and no UI libraries: --no-default-groups skips the "dev" and "ui" groups.
+# and no UI libraries: --no-default-groups skips the "dev" and "ui" groups; the "cloud"
+# group adds the AWS Distro for OpenTelemetry (traces to CloudWatch).
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --locked --no-default-groups --no-install-project
+RUN uv sync --locked --no-default-groups --group cloud --no-install-project
 
 COPY src ./src
-RUN uv sync --locked --no-default-groups
+RUN uv sync --locked --no-default-groups --group cloud
 
 # Run as an unprivileged user, never root.
 RUN useradd --create-home --uid 1000 finsight
@@ -25,4 +26,6 @@ USER finsight
 
 # Settings come from environment variables set on the runtime - never from a baked-in .env.
 EXPOSE 8080
-CMD ["uvicorn", "finsight.api:app", "--host", "0.0.0.0", "--port", "8080"]
+# opentelemetry-instrument (ADOT) sets up tracing before the app starts; AgentCore Runtime
+# supplies its settings (where to send spans) through environment variables.
+CMD ["opentelemetry-instrument", "uvicorn", "finsight.api:app", "--host", "0.0.0.0", "--port", "8080"]

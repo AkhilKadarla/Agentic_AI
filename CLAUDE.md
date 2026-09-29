@@ -58,6 +58,9 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - Tracing: tracing.py (OpenTelemetry, gen_ai.* attributes). Spans in the agent are created
   with child_span() and an explicit parent, never made current (send() is a generator that
   yields mid-span). tests/conftest.py turns tracing off; tests use InMemorySpanExporter
+- Cloud traces: the container starts via `opentelemetry-instrument` (ADOT, `cloud` dependency
+  group, pins OpenTelemetry to its version); FINSIGHT_TRACE_EXPORTER=otel makes tracer() use
+  ADOT's global provider -> CloudWatch (runtime log group). Content capture is off when deployed
 - API: api.py follows the AgentCore Runtime HTTP contract (port 8080, /ping, /invocations SSE,
   session header). Auth is enforced by AgentCore (Cognito JWT), not in the app. UI libraries live
   in the `ui` dependency group, excluded from the arm64 Docker image (`--no-default-groups`)

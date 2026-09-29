@@ -12,11 +12,12 @@ A *trace* is one question from start to finish; each *span* inside it is one tim
 Attribute names follow OpenTelemetry's GenAI conventions (gen_ai.*), so tools such as
 AWS X-Ray or Datadog can read these traces without translation. Locally, spans are written
 as JSON lines to logs/traces/<date>.jsonl (git-ignored), and files older than the
-retention period are deleted. Phase 8 can swap the file exporter for an OTLP exporter
-without touching the instrumented code.
+retention period are deleted. Deployed on AgentCore (FINSIGHT_TRACE_EXPORTER=otel), the
+same spans go to CloudWatch through the AWS Distro for OpenTelemetry instead - the
+instrumented code doesn't change.
 
 Settings: FINSIGHT_TRACING=on|off, FINSIGHT_TRACE_CONTENT=on|off (record question and
-answer text), FINSIGHT_TRACE_RETENTION_DAYS (default 30).
+answer text), FINSIGHT_TRACE_RETENTION_DAYS (default 30), FINSIGHT_TRACE_EXPORTER=file|otel.
 """
 
 import json
@@ -99,6 +100,11 @@ def configure(exporter: SpanExporter | None = None) -> TracerProvider:
 def tracer() -> trace.Tracer:
     if not config.TRACING:
         return trace.NoOpTracer()
+    if config.TRACE_EXPORTER == "otel":
+        # Deployed: `opentelemetry-instrument` (AWS Distro for OpenTelemetry) has already set
+        # up the global provider, which exports to CloudWatch. Using it also nests our spans
+        # under its automatic ones (the HTTP request, the Bedrock and SEC calls).
+        return trace.get_tracer("finsight", __version__)
     return (_provider or configure()).get_tracer("finsight")
 
 

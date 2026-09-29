@@ -37,6 +37,9 @@ FILINGS_BUCKET = os.getenv("FINSIGHT_FILINGS_BUCKET")
 TRACING = os.getenv("FINSIGHT_TRACING", "on").lower() != "off"
 TRACE_CONTENT = os.getenv("FINSIGHT_TRACE_CONTENT", "on").lower() != "off"
 TRACE_RETENTION_DAYS = int(os.getenv("FINSIGHT_TRACE_RETENTION_DAYS", "30"))
+# Where spans go: "file" (logs/traces/, default) or "otel" (the process-wide OpenTelemetry
+# setup - on AgentCore, the AWS Distro for OpenTelemetry sends them to CloudWatch).
+TRACE_EXPORTER = os.getenv("FINSIGHT_TRACE_EXPORTER", "file").lower()
 
 # The deployed FinSight (Phase 8): Cognito login + the AgentCore runtime to call.
 # None of these are secrets. Used by `finsight remote`.

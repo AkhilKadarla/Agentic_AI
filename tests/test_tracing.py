@@ -177,3 +177,20 @@ def test_cli_lists_and_shows_traces(tmp_path, monkeypatch, capsys) -> None:
 
     assert "What is EBITDA?" in listing and "answered" in listing
     assert tree.startswith("research") and "chat claude-opus-5" in tree
+
+
+def test_otel_mode_uses_the_global_provider(monkeypatch) -> None:
+    # Deployed: opentelemetry-instrument (ADOT) owns the global provider and its CloudWatch
+    # exporter, so tracer() must use it and never set up the local file exporter.
+    monkeypatch.setattr(config, "TRACING", True)
+    monkeypatch.setattr(config, "TRACE_EXPORTER", "otel")
+    monkeypatch.setattr(tracing, "_provider", None)
+    global_tracer = MagicMock()
+    requested = []
+    monkeypatch.setattr(
+        tracing.trace, "get_tracer", lambda *args: requested.append(args) or global_tracer
+    )
+    monkeypatch.setattr(tracing, "configure", lambda *a: pytest.fail("file exporter was set up"))
+
+    assert tracing.tracer() is global_tracer
+    assert requested[0][0] == "finsight"
