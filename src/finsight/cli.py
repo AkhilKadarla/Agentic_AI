@@ -48,6 +48,9 @@ def main(argv: list[str] | None = None) -> None:
     commands.add_parser(
         "remote", help="log in and chat with the deployed FinSight (AgentCore Runtime)"
     )
+    commands.add_parser(
+        "mcp", help="run FinSight's SEC tools as an MCP server (started by Claude Code etc.)"
+    )
     index_cmd = commands.add_parser(
         "index", help="add companies' latest 10-K text to the Knowledge Base (or --list)"
     )
@@ -71,6 +74,11 @@ def main(argv: list[str] | None = None) -> None:
         return index(args.tickers, show_list=args.list)
     if args.command == "remote":
         return remote_chat()
+    if args.command == "mcp":
+        # stdout carries the MCP protocol itself, so nothing else may be printed here
+        from finsight import mcp_server
+
+        return mcp_server.main()
     if args.command == "ui":
         app = Path(__file__).with_name("ui.py")
         print("Starting FinSight - open http://localhost:8501 (Ctrl+C to stop)")
