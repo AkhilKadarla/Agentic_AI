@@ -131,7 +131,7 @@ def invocations(
             note, usage = agent.write_note()
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
-        return {"note": note.model_dump(), "cost_usd": usage.cost_usd()}
+        return {"note": note.model_dump(), "usage": asdict(usage), "cost_usd": usage.cost_usd()}
     if not body.prompt.strip():
         return JSONResponse({"error": "prompt is required"}, status_code=400)
     return StreamingResponse(sse(agent.send(body.prompt)), media_type="text/event-stream")
