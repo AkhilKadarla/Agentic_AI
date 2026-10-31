@@ -7,6 +7,7 @@ the file, so later bugs in FinSight's own data code can't silently change the an
 """
 
 import json
+from datetime import date
 from pathlib import Path
 
 from finsight import config, sec  # config loads .env (SEC_USER_AGENT)
@@ -26,6 +27,16 @@ def fact(ticker: str, metric: str, index: int = 0) -> dict:
         "source": f"{data['company']} {data['xbrl_concept']} FY ended {row['period_end']}",
         "period_end": row["period_end"],
     }
+
+
+def fy(period_end: str) -> str:
+    """Name a fiscal year by its end date, e.g. "fiscal year ended August 31, 2025".
+
+    Questions name the year instead of saying "most recent": the expected values are
+    frozen, so when a company files a newer 10-K a "latest year" question would have a
+    new right answer and the case would fail even though the agent was correct."""
+    d = date.fromisoformat(period_end)
+    return f"fiscal year ended {d:%B} {d.day}, {d.year}"
 
 
 def expect(label: str, f: dict, tolerance: float = 0.01) -> dict:
@@ -92,7 +103,7 @@ for cid, ticker, metric, label, note in [
         cid,
         "single",
         f"What was {label.split()[0] if ticker != 'GS' else 'Goldman Sachs'}'s "
-        f"{names[metric]} in its most recent fiscal year?",
+        f"{names[metric]} in its {fy(f['period_end'])}?",
         [expect(label, f)],
         note,
     )
@@ -107,25 +118,27 @@ add(
     [expect("Apple revenue FY2024", aapl_fy24)],
     "calendar vs fiscal year: Apple's FY2024 ended Sep 28, 2024",
 )
+aapl_eps = fact("AAPL", "eps_diluted")
 add(
     "aapl_eps",
     "single",
-    "What was Apple's diluted EPS in its latest fiscal year?",
-    [expect("Apple diluted EPS", fact("AAPL", "eps_diluted"), tolerance=0.01)],
+    f"What was Apple's diluted EPS in its {fy(aapl_eps['period_end'])}?",
+    [expect("Apple diluted EPS", aapl_eps, tolerance=0.01)],
     "per-share unit",
 )
+jpm_assets = fact("JPM", "total_assets")
 add(
     "jpm_total_assets",
     "single",
-    "What were JPMorgan's total assets at the end of its latest fiscal year?",
-    [expect("JPMorgan total assets", fact("JPM", "total_assets"))],
+    f"What were JPMorgan's total assets at the end of its {fy(jpm_assets['period_end'])}?",
+    [expect("JPMorgan total assets", jpm_assets)],
     "balance-sheet item",
 )
 nvda_10k = sec.get_recent_filings("NVDA", http, form_type="10-K", limit=1)["filings"][0]
 add(
     "nvda_10k_date",
     "single",
-    "When did NVIDIA file its most recent 10-K?",
+    f"When did NVIDIA file its 10-K for its {fy(nvda_10k['report_date'])}?",
     [
         {
             "label": "NVIDIA 10-K filing date",
@@ -139,17 +152,21 @@ add(
 )
 
 # --- multi-year ---
+nvda_3y = [fact("NVDA", "revenue", i) for i in range(3)]
 add(
     "nvda_revenue_3y",
     "multi_year",
-    "What was NVIDIA's revenue in each of its last three fiscal years?",
-    [expect(f"NVIDIA revenue FY{i}", fact("NVDA", "revenue", i)) for i in range(3)],
+    f"What was NVIDIA's revenue in each of its last three fiscal years, up to and "
+    f"including its {fy(nvda_3y[0]['period_end'])}?",
+    [expect(f"NVIDIA revenue FY{i}", f) for i, f in enumerate(nvda_3y)],
 )
+wmt_2y = [fact("WMT", "revenue", i) for i in range(2)]
 add(
     "wmt_revenue_2y",
     "multi_year",
-    "What was Walmart's revenue in each of its last two fiscal years?",
-    [expect(f"Walmart revenue FY{i}", fact("WMT", "revenue", i)) for i in range(2)],
+    f"What was Walmart's revenue in each of its last two fiscal years, up to and "
+    f"including its {fy(wmt_2y[0]['period_end'])}?",
+    [expect(f"Walmart revenue FY{i}", f) for i, f in enumerate(wmt_2y)],
 )
 
 # --- derived (calculations) ---
@@ -157,7 +174,7 @@ ni, rev = fact("AAPL", "net_income"), fact("AAPL", "revenue")
 add(
     "aapl_net_margin",
     "derived",
-    "What was Apple's net profit margin in its latest fiscal year?",
+    f"What was Apple's net profit margin in its {fy(rev['period_end'])}?",
     [
         derived(
             "Apple net margin",
@@ -173,7 +190,8 @@ ocf, capex = fact("COST", "operating_cash_flow"), fact("COST", "capital_expendit
 add(
     "cost_fcf",
     "derived",
-    "What was Costco's free cash flow (operating cash flow minus capex) in its latest fiscal year?",
+    "What was Costco's free cash flow (operating cash flow minus capex) in its "
+    f"{fy(ocf['period_end'])}?",
     [
         derived(
             "Costco free cash flow",
@@ -189,7 +207,8 @@ r0, r1 = fact("TSLA", "revenue", 0), fact("TSLA", "revenue", 1)
 add(
     "tsla_growth",
     "derived",
-    "By what percentage did Tesla's revenue change in its latest fiscal year?",
+    f"By what percentage did Tesla's revenue change in its {fy(r0['period_end'])}, "
+    "compared with the year before?",
     [
         derived(
             "Tesla revenue growth",
@@ -203,36 +222,34 @@ add(
 )
 
 # --- comparisons ---
+v_rev, ma_rev = fact("V", "revenue"), fact("MA", "revenue")
 add(
     "v_vs_ma_revenue",
     "comparison",
-    "Compare Visa's and Mastercard's revenue in their most recent fiscal years.",
-    [
-        expect("Visa revenue", fact("V", "revenue")),
-        expect("Mastercard revenue", fact("MA", "revenue")),
-    ],
+    f"Compare Visa's revenue in its {fy(v_rev['period_end'])} with Mastercard's revenue "
+    f"in its {fy(ma_rev['period_end'])}.",
+    [expect("Visa revenue", v_rev), expect("Mastercard revenue", ma_rev)],
 )
+wmt_rev, tgt_rev = fact("WMT", "revenue"), fact("TGT", "revenue")
 add(
     "wmt_vs_tgt_revenue",
     "comparison",
-    "Compare Walmart's and Target's revenue in their most recent fiscal years.",
-    [
-        expect("Walmart revenue", fact("WMT", "revenue")),
-        expect("Target revenue", fact("TGT", "revenue")),
-    ],
+    f"Compare Walmart's revenue in its {fy(wmt_rev['period_end'])} with Target's revenue "
+    f"in its {fy(tgt_rev['period_end'])}.",
+    [expect("Walmart revenue", wmt_rev), expect("Target revenue", tgt_rev)],
 )
+aapl_ni, msft_ni = fact("AAPL", "net_income"), fact("MSFT", "net_income")
 add(
     "aapl_vs_msft_net_income",
     "comparison",
-    "Which earned more net income in its latest fiscal year, Apple or Microsoft? "
-    "Give both figures.",
-    [
-        expect("Apple net income", fact("AAPL", "net_income")),
-        expect("Microsoft net income", fact("MSFT", "net_income")),
-    ],
+    f"Which earned more net income: Apple in its {fy(aapl_ni['period_end'])}, or "
+    f"Microsoft in its {fy(msft_ni['period_end'])}? Give both figures.",
+    [expect("Apple net income", aapl_ni), expect("Microsoft net income", msft_ni)],
 )
 
 # --- data that does not exist ---
+# These keep "latest": there is no frozen value to drift, and the traps are about the agent
+# admitting a gap in the data, whichever year it looks at.
 # Rule (agreed with the project owner): the answer MUST say the figure isn't available from
 # SEC data; it MAY add a figure from memory only if clearly labelled as unverified
 # background; presenting a memory figure as verified data FAILS.
