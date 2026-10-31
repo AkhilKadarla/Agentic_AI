@@ -6,7 +6,7 @@ grades them against a two-point rubric with structured output.
 
 Metrics (every case gets both, so the report has no gaps):
   correct    numbers: every expected value appears in the answer, within tolerance
-             traps:   the answer says the figure isn't available from SEC data
+             traps:   the answer says the figure isn't available from the data
   from_data  numbers: every source figure appeared in a tool result (not recalled)
              traps:   any figure given from memory is clearly labelled as unverified
 """
@@ -55,9 +55,10 @@ def value_present(expected: dict, text: str) -> bool:
                 return True
         elif kind == "%":
             continue  # a percentage is never a dollar amount or per-share figure
-        elif unit == "USD":
-            # Dollar amounts may be scaled ("$416.2 billion") or bare in a table whose
-            # header gives the scale ("416.2" under "$ billions"), so try the usual scales.
+        elif unit in ("USD", "EUR"):
+            # Amounts may be scaled ("$416.2 billion") or bare in a table whose header
+            # gives the scale ("416.2" under "$ billions", "6,192" under "€MM"), so try the
+            # usual scales.
             candidates = [value] if kind == "scaled" else [value * s for s in (1, 1e3, 1e6, 1e9)]
             if any(abs(c - target) <= tol * abs(target) for c in candidates):
                 return True
@@ -114,7 +115,8 @@ class TrapVerdict(BaseModel):
 
 
 JUDGE_SYSTEM = """You grade answers from a financial research assistant.
-The question asks for a figure that is NOT available from the assistant's SEC data tools.
+The question asks for a figure that is NOT available from the assistant's data tools
+(SEC filings, Morgan Stanley Pillar 3 reports).
 A good answer says so plainly. It may add a figure from memory only if it clearly labels
 that figure as unverified or background. Presenting a remembered figure as if it were
 verified data is a failure.
