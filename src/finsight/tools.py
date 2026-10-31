@@ -11,7 +11,7 @@ import json
 import httpx
 from botocore.exceptions import BotoCoreError, ClientError
 
-from finsight import config, knowledge_base, sec
+from finsight import config, knowledge_base, pillar3, sec
 
 FORM_TYPES = ["10-K", "10-Q", "8-K", "DEF 14A", "4", "S-1", "20-F"]
 
@@ -68,6 +68,37 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "get_key_metrics",
+        "description": (
+            "Get a Morgan Stanley regulated entity's key capital metrics from its public "
+            "Pillar 3 disclosure report: CET1, Tier 1 and total capital; risk-weighted assets "
+            "(RWAs); CET1, Tier 1 and total capital ratios; leverage exposure and leverage "
+            "ratio; and TLAC (MSEHSE Group and MSI Group only). Returns the quarters of `year` "
+            "disclosed in that year's annual report (reports can leave quarters blank), each "
+            "value exactly as printed with its table and page, plus a link to the report. "
+            "Amounts are in millions of the entity's reporting currency: EUR for MSEHSE Group "
+            "and MSESE Consol, USD for MSI Group and MSIP. Cite the report and page."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "enum": list(pillar3.ENTITIES),
+                    "description": "; ".join(f"{k}: {v}" for k, v in pillar3.ENTITIES.items()),
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "Report year (figures as at 31 December). Available: "
+                    + ", ".join(str(y) for y in sorted({r.year for r in pillar3.REPORTS})),
+                },
+            },
+            "required": ["entity", "year"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -115,6 +146,12 @@ def run_tool(name: str, tool_input: dict, http: httpx.Client | None = None) -> t
     """
     if name == "search_filings":
         return _search_filings(tool_input)
+    if name == "get_key_metrics":  # reads the bundled Pillar 3 data file: no network
+        try:
+            result = pillar3.key_metrics(tool_input["entity"], int(tool_input["year"]))
+        except pillar3.Pillar3Error as e:
+            return str(e), True
+        return json.dumps(result), False
     http = http or sec.make_http_client()
     try:
         if name == "get_company_filings":

@@ -1,4 +1,4 @@
-"""FinSight's SEC tools as an MCP server, for any MCP client (Claude Code, Claude Desktop, ...).
+"""FinSight's tools as an MCP server, for any MCP client (Claude Code, Claude Desktop, ...).
 
 MCP (Model Context Protocol) is a standard plug between AI apps and tools. Our agent calls
 its tools directly; an MCP server offers the same tools to *other* AI apps, which discover
@@ -7,14 +7,15 @@ them (names, descriptions, input schemas) and call them over the protocol.
     uv run finsight mcp      # speaks MCP over stdin/stdout; the client app starts it
 
 What this server offers:
-  tools      get_company_filings, get_financial_facts, and search_filings (10-K text) when
-             FINSIGHT_KB_ID is set - the same code the agent runs (tools.run_tool)
+  tools      get_company_filings, get_financial_facts, get_key_metrics (Pillar 3), and
+             search_filings (10-K text) when FINSIGHT_KB_ID is set - the same code the agent
+             runs (tools.run_tool)
   resource   finsight://metrics - the metrics get_financial_facts understands
   prompt     research_company - FinSight's research approach for one company
 
 Compliance note: with MCP, the *client's* model writes the answer, so FinSight's guardrail
-(which reviews FinSight's own answers) is not in the loop. The tools return public SEC
-data only, and are read-only.
+(which reviews FinSight's own answers) is not in the loop. The tools return public data
+only (SEC filings, published Pillar 3 reports), and are read-only.
 """
 
 import json
@@ -25,7 +26,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from finsight import __version__, config, sec
+from finsight import __version__, config, pillar3, sec
 from finsight.tools import FORM_TYPES, SEARCH_FILINGS_TOOL, TOOLS, run_tool
 
 # One source of truth: the descriptions Claude sees in the agent are the ones MCP clients see.
@@ -37,17 +38,24 @@ READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldH
 # Results go back as the plain JSON text the agent's Claude sees (not re-wrapped as
 # {"result": "<json string>"}, which the SDK does for str-returning tools by default).
 TOOL_OPTIONS = {"annotations": READ_ONLY, "structured_output": False}
+# get_key_metrics reads the Pillar 3 data file bundled with FinSight: no outside world.
+LOCAL_TOOL_OPTIONS = {
+    **TOOL_OPTIONS,
+    "annotations": ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+}
 
 INSTRUCTIONS = (
     "FinSight gives you US public-company data from SEC EDGAR: recent filings, reported "
-    "annual financials (XBRL), and - when available - passages from 10-K text. Use the tools "
-    "instead of memory for company figures, state the fiscal periods you use, and present "
-    "the results as educational analysis, not investment advice."
+    "annual financials (XBRL), and - when available - passages from 10-K text; plus key "
+    "capital metrics of Morgan Stanley's regulated entities from their public Pillar 3 "
+    "reports. Use the tools instead of memory for company figures, state the periods you "
+    "use, and present the results as educational analysis, not investment advice."
 )
 
 Ticker = Annotated[str, Field(description="Stock ticker, e.g. AAPL")]
 FormType = Literal[tuple(FORM_TYPES)]
 Metric = Literal[tuple(sec.METRICS)]
+Entity = Literal[tuple(pillar3.ENTITIES)]
 
 
 def _run(name: str, **tool_input) -> str:
@@ -78,6 +86,13 @@ def build_server() -> MCPServer:
         years: Annotated[int, Field(ge=1, le=10, description="Fiscal years (1-10)")] = 5,
     ) -> str:
         return _run("get_financial_facts", ticker=ticker, metric=metric, years=years)
+
+    @server.tool(description=DESCRIPTIONS["get_key_metrics"], **LOCAL_TOOL_OPTIONS)
+    def get_key_metrics(
+        entity: Annotated[Entity, Field(description="Morgan Stanley regulated entity")],
+        year: Annotated[int, Field(description="Report year (figures as at 31 December)")],
+    ) -> str:
+        return _run("get_key_metrics", entity=entity, year=year)
 
     if config.KB_ID:  # same rule as the agent: offer 10-K search only when a KB exists
 

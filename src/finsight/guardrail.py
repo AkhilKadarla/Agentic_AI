@@ -216,6 +216,14 @@ def _readable(tool_name: str, data: dict) -> str:
             f"section: {p['text']}"
             for p in data["passages"]
         )
+    if tool_name == "get_key_metrics":  # Pillar 3 values, each with where it is printed
+        lines = [
+            f"{data['entity']} {m['name']} as at {_written(v['period'])}: "
+            f"{_reported(v, m['unit'])} ({v['table']}, page {v['page']})."
+            for m in data["metrics"].values()
+            for v in m["values"]
+        ]
+        return f"From the {data['source']['report']}: " + " ".join(lines)
     company = f"{data['company']} ({data['ticker']})"
     if tool_name == "get_financial_facts":
         metric = data["metric"].replace("_", " ")
@@ -253,6 +261,18 @@ def _money(value: float, unit: str) -> str:
             return f"${value / 1e6:,.1f} million ({full})"
         return full
     return f"{value:,} {unit}"
+
+
+def _reported(value: dict, unit: str) -> str:
+    """A Pillar 3 value as printed: "23.29%", or "€27,283 million (€27.3 billion)"."""
+    if unit == "%":
+        return value["as_printed"]
+    currency = unit.split()[0]  # "EUR millions" -> "EUR"
+    symbol = {"EUR": "€", "USD": "$", "GBP": "£"}.get(currency, f"{currency} ")
+    text = f"{symbol}{value['as_printed']} million"
+    if abs(value["value"]) >= 1000:
+        text += f" ({symbol}{value['value'] / 1000:,.1f} billion)"
+    return text
 
 
 def _grounding_scores(response: dict) -> dict[str, float]:

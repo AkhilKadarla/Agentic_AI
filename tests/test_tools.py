@@ -127,3 +127,30 @@ def test_search_filings_errors_are_returned_not_raised(monkeypatch) -> None:
     result, is_error = run_tool("search_filings", {"ticker": "TSLA", "query": "risks"})
 
     assert is_error and "FINSIGHT_KB_ID" in result
+
+
+def test_get_key_metrics_returns_values_with_their_source() -> None:
+    # Reads the bundled Pillar 3 data file: no network, no AWS.
+    result, is_error = run_tool("get_key_metrics", {"entity": "MSI Group", "year": 2023})
+
+    assert not is_error
+    data = json.loads(result)
+    assert data["source"]["report"] == "MSI Group Pillar 3 Disclosure Report, 31 December 2023"
+    assert data["source"]["url"].startswith("https://www.morganstanley.com/")
+    rwa = data["metrics"]["rwa"]
+    assert rwa["unit"] == "USD millions"
+    assert rwa["values"][0] == {
+        "period": "2023-12-31",
+        "value": 155523,
+        "as_printed": "155,523",
+        "table": "UK KM1",
+        "page": 6,
+    }
+
+
+def test_get_key_metrics_for_a_missing_year_is_reported_as_error() -> None:
+    result, is_error = run_tool("get_key_metrics", {"entity": "MSESE Consol", "year": 2022})
+
+    assert is_error
+    assert "No key metrics for MSESE Consol in 2022" in result
+    assert "MSESE Consol 2023" in result  # tells Claude what it can ask for instead

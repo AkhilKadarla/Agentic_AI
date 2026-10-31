@@ -49,12 +49,16 @@ def tools_by_name(server) -> dict:
     return {tool.name: tool for tool in call(server, "list_tools").tools}
 
 
-def test_offers_the_sec_tools_read_only():
+def test_offers_the_tools_read_only():
     tools = tools_by_name(mcp_server.build_server())
-    assert set(tools) == {"get_company_filings", "get_financial_facts"}  # no KB configured
+    # no KB configured, so no search_filings
+    assert set(tools) == {"get_company_filings", "get_financial_facts", "get_key_metrics"}
     for tool in tools.values():
         assert tool.annotations.read_only_hint is True
         assert tool.annotations.destructive_hint is False
+    # SEC tools reach the internet; Pillar 3 metrics come from a file bundled with FinSight
+    assert tools["get_financial_facts"].annotations.open_world_hint is True
+    assert tools["get_key_metrics"].annotations.open_world_hint is False
 
 
 def test_offers_10k_search_only_with_a_knowledge_base(monkeypatch):
@@ -116,6 +120,30 @@ def test_invalid_arguments_are_rejected_before_any_sec_call(fake_tools):
     )
     too_many = call(server, "call_tool", "get_company_filings", {"ticker": "AAPL", "limit": 500})
     assert bad_metric.is_error and too_many.is_error
+    assert fake_tools == []
+
+
+def test_key_metrics_runs_end_to_end_without_network():
+    result = call(
+        mcp_server.build_server(),
+        "call_tool",
+        "get_key_metrics",
+        {"entity": "MSIP", "year": 2023},
+    )
+
+    assert not result.is_error
+    data = json.loads(result.content[0].text)
+    assert data["metrics"]["cet1_ratio"]["values"][0]["as_printed"] == "14.85%"
+
+
+def test_key_metrics_rejects_unknown_entities_before_running(fake_tools):
+    result = call(
+        mcp_server.build_server(),
+        "call_tool",
+        "get_key_metrics",
+        {"entity": "MS Bank", "year": 2023},
+    )
+    assert result.is_error
     assert fake_tools == []
 
 

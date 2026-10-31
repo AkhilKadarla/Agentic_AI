@@ -328,6 +328,51 @@ def test_cli_describes_each_report_kind() -> None:
     assert "UNVERIFIED" in describe_report(GuardrailReport(error="down"))
 
 
+def test_readable_source_for_pillar3_key_metrics() -> None:
+    result = json.dumps(
+        {
+            "entity": "MSEHSE Group",
+            "year": 2023,
+            "source": {"report": "MSEHSE Group Pillar 3 Disclosure Report, 31 December 2023"},
+            "metrics": {
+                "rwa": {
+                    "name": "Total risk-weighted exposure amount (RWAs)",
+                    "unit": "EUR millions",
+                    "values": [
+                        {
+                            "period": "2023-12-31",
+                            "value": 27283,
+                            "as_printed": "27,283",
+                            "table": "EU KM1",
+                            "page": 6,
+                        }
+                    ],
+                },
+                "cet1_ratio": {
+                    "name": "CET1 ratio",
+                    "unit": "%",
+                    "values": [
+                        {
+                            "period": "2023-06-30",
+                            "value": 21.81,
+                            "as_printed": "21.81%",
+                            "table": "EU KM1",
+                            "page": 6,
+                        }
+                    ],
+                },
+            },
+        }
+    )
+
+    assert readable_source("get_key_metrics", result) == (
+        "From the MSEHSE Group Pillar 3 Disclosure Report, 31 December 2023: MSEHSE Group "
+        "Total risk-weighted exposure amount (RWAs) as at December 31, 2023 (2023-12-31): "
+        "€27,283 million (€27.3 billion) (EU KM1, page 6). MSEHSE Group CET1 ratio as at "
+        "June 30, 2023 (2023-06-30): 21.81% (EU KM1, page 6)."
+    )
+
+
 def test_readable_source_for_filing_passages() -> None:
     result = json.dumps(
         {
