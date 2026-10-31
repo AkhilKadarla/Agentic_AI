@@ -1,0 +1,24 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor the capital, leverage or TLAC figures of Morgan Stanley's regulated entities, use the\nPillar 3 key metrics tool, quote values exactly as printed and cite the report and page.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was the CET1 capital of MSESE Consol (Morgan Stanley Europe SE, consolidated) at 31 December 2023, in euros?"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_key_metrics",
+  "content": "{\n  \"entity\": \"MSESE Consol\",\n  \"year\": 2023\n}",
+  "thinking": "The user wants the CET1 capital of MSESE Consol at 31 December 2023. I should use the get_key_metrics tool with entity \"MSESE Consol\" and year 2023."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"entity\": \"MSESE Consol\", \"description\": \"Morgan Stanley Europe SE, consolidated (EU; euros; reported from 2023)\", \"year\": 2023, \"source\": {\"report\": \"MSEHSE Group Pillar 3 Disclosure Report, 31 December 2023\", \"url\": \"https://www.morganstanley.com/content/dam/msdotcom/en/about-us-ir/pillar3/MSEHSE_Pillar_3_Disclosure_Report_31_December_2023_English.pdf\"}, \"metrics\": {\"cet1_capital\": {\"name\": \"Common Equity Tier 1 (CET1) capital\", \"unit\": \"EUR millions\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 5998.0, \"as_printed\": \"5,998\", \"table\": \"EU KM1\", \"page\": 8}]}, \"tier1_capital\": {\"name\": \"Tier 1 capital\", \"unit\": \"EUR millions\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 6998.0, \"as_printed\": \"6,998\", \"table\": \"EU KM1\", \"page\": 8}]}, \"total_capital\": {\"name\": \"Total capital (own funds)\", \"unit\": \"EUR millions\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 7998.0, \"as_printed\": \"7,998\", \"table\": \"EU KM1\", \"page\": 8}]}, \"rwa\": {\"name\": \"Total risk-weighted exposure amount (RWAs)\", \"unit\": \"EUR millions\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 27066.0, \"as_printed\": \"27,066\", \"table\": \"EU KM1\", \"page\": 8}]}, \"cet1_ratio\": {\"name\": \"CET1 ratio\", \"unit\": \"%\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 22.16, \"as_printed\": \"22.16%\", \"table\": \"EU KM1\", \"page\": 8}]}, \"tier1_ratio\": {\"name\": \"Tier 1 ratio\", \"unit\": \"%\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 25.86, \"as_printed\": \"25.86%\", \"table\": \"EU KM1\", \"page\": 8}]}, \"total_capital_ratio\": {\"name\": \"Total capital ratio\", \"unit\": \"%\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 29.55, \"as_printed\": \"29.55%\", \"table\": \"EU KM1\", \"page\": 8}]}, \"leverage_exposure\": {\"name\": \"Leverage ratio total exposure measure\", \"unit\": \"EUR millions\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 88459.0, \"as_printed\": \"88,459\", \"table\": \"EU KM1\", \"page\": 8}]}, \"leverage_ratio\": {\"name\": \"Leverage ratio\", \"unit\": \"%\", \"values\": [{\"period\": \"2023-12-31\", \"value\": 7.91, \"as_printed\": \"7.91%\", \"table\": \"EU KM1\", \"page\": 8}]}}}"
+ },
+ {
+  "role": "assistant",
+  "content": "At **31 December 2023**, the Common Equity Tier 1 (CET1) capital of **Morgan Stanley Europe SE, consolidated (MSESE Consol)** was:\n\n> **\u20ac5,998 million** (approximately \u20ac6.0 billion)\n\nThis figure is taken exactly as printed in **Table EU KM1, page 8** of the *MSEHSE Group Pillar 3 Disclosure Report, 31 December 2023* ([link to report](https://www.morganstanley.com/content/dam/msdotcom/en/about-us-ir/pillar3/MSEHSE_Pillar_3_Disclosure_Report_31_December_2023_English.pdf)).\n\nFor additional context, the corresponding **CET1 ratio** was **22.16%**, calculated against total risk-weighted assets (RWAs) of **\u20ac27,066 million**."
+ }
+]
