@@ -11,7 +11,7 @@ import json
 import httpx
 from botocore.exceptions import BotoCoreError, ClientError
 
-from finsight import config, knowledge_base, sec
+from finsight import config, knowledge_base, pillar3, sec
 
 FORM_TYPES = ["10-K", "10-Q", "8-K", "DEF 14A", "4", "S-1", "20-F"]
 
@@ -68,6 +68,37 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "get_key_metrics",
+        "description": (
+            "Get a Morgan Stanley regulated entity's key capital metrics from its public "
+            "Pillar 3 disclosure report: CET1, Tier 1 and total capital; risk-weighted assets "
+            "(RWAs); CET1, Tier 1 and total capital ratios; leverage exposure and leverage "
+            "ratio; and TLAC (MSEHSE Group and MSI Group only). Returns the quarters of `year` "
+            "disclosed in that year's annual report (reports can leave quarters blank), each "
+            "value exactly as printed with its table and page, plus a link to the report. "
+            "Amounts are in millions of the entity's reporting currency: EUR for MSEHSE Group "
+            "and MSESE Consol, USD for MSI Group and MSIP. Cite the report and page."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "enum": list(pillar3.ENTITIES),
+                    "description": "; ".join(f"{k}: {v}" for k, v in pillar3.ENTITIES.items()),
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "Report year (figures as at 31 December). Available: "
+                    + ", ".join(str(y) for y in sorted({r.year for r in pillar3.REPORTS})),
+                },
+            },
+            "required": ["entity", "year"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -101,10 +132,43 @@ SEARCH_FILINGS_TOOL = {
 }
 
 
+SEARCH_REPORTS_TOOL = {
+    "name": "search_reports",
+    "description": (
+        "Search the text of Morgan Stanley's public Pillar 3 disclosure reports for passages "
+        "relevant to a question, ranked by meaning. Use it for qualitative questions: why a "
+        "ratio or RWAs changed, how a risk is managed, which requirements apply, capital "
+        "actions. Report groups: 'MSEHSE Group' (EU; also covers MSESE) and 'MSI Group' (UK; "
+        "also covers MSIP), as at 31 December 2022 and 2023. Returns up to 5 passages with "
+        "the report, chapter and page to cite. Tables inside passages are flattened text whose "
+        "columns are unreliable: for capital, RWA, leverage and TLAC figures use "
+        "get_key_metrics instead."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "What to look for, in plain words"},
+            "report_group": {
+                "type": "string",
+                "enum": sorted({r.group for r in pillar3.REPORTS}),
+                "description": "Only search this group's reports. Omit to search all.",
+            },
+            "year": {
+                "type": "integer",
+                "description": "Only search the report as at 31 December of this year.",
+            },
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
+
 def available_tools() -> list[dict]:
-    """The tools to offer Claude: the SEC tools, plus 10-K text search when a Knowledge
-    Base is configured (FINSIGHT_KB_ID)."""
-    return [*TOOLS, SEARCH_FILINGS_TOOL] if config.KB_ID else TOOLS
+    """The tools to offer Claude: the SEC and Pillar 3 metrics tools, plus 10-K and Pillar 3
+    text search when a Knowledge Base is configured (FINSIGHT_KB_ID)."""
+    return [*TOOLS, SEARCH_FILINGS_TOOL, SEARCH_REPORTS_TOOL] if config.KB_ID else TOOLS
 
 
 def run_tool(name: str, tool_input: dict, http: httpx.Client | None = None) -> tuple[str, bool]:
@@ -115,6 +179,14 @@ def run_tool(name: str, tool_input: dict, http: httpx.Client | None = None) -> t
     """
     if name == "search_filings":
         return _search_filings(tool_input)
+    if name == "search_reports":
+        return _search_reports(tool_input)
+    if name == "get_key_metrics":  # reads the bundled Pillar 3 data file: no network
+        try:
+            result = pillar3.key_metrics(tool_input["entity"], int(tool_input["year"]))
+        except pillar3.Pillar3Error as e:
+            return str(e), True
+        return json.dumps(result), False
     http = http or sec.make_http_client()
     try:
         if name == "get_company_filings":
@@ -156,6 +228,37 @@ def _search_filings(tool_input: dict) -> tuple[str, bool]:
                 {
                     "section": p.section,
                     "fiscal_year_end": p.fiscal_year_end,
+                    "relevance": round(p.score, 2),
+                    "text": p.text,
+                    "source_url": p.source_url,
+                }
+                for p in passages
+            ],
+        }
+    ), False
+
+
+def _search_reports(tool_input: dict) -> tuple[str, bool]:
+    try:
+        passages = knowledge_base.search_reports(
+            tool_input["query"], tool_input.get("report_group"), tool_input.get("year")
+        )
+    except (knowledge_base.KnowledgeBaseError, BotoCoreError, ClientError) as e:
+        return f"Pillar 3 report search failed: {e}", True
+    if not passages:
+        return (
+            "No Pillar 3 report text matched. Tell the user the reports can be indexed with: "
+            "finsight pillar3 --index",
+            True,
+        )
+    return json.dumps(
+        {
+            "query": tool_input["query"],
+            "passages": [
+                {
+                    "report": p.report,
+                    "chapter": p.chapter,
+                    "page": p.page,
                     "relevance": round(p.score, 2),
                     "text": p.text,
                     "source_url": p.source_url,

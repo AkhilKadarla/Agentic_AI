@@ -15,6 +15,8 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
 - `uv run pre-commit run --all-files` - run all commit hooks
 - `uv run finsight ui` - Streamlit app on localhost:8501 (config in .streamlit/config.toml)
 - `uv run finsight remote` - log in (Cognito, PKCE) and chat with the deployed agent
+- `uv run finsight pillar3` - download the Pillar 3 PDFs (data/reg_reports/) and rebuild
+  src/finsight/data/pillar3_key_metrics.json (review its diff like code)
 - `uv run finsight mcp` - MCP server over stdio; `.mcp.json` registers it for Claude Code in this repo
 - `FINSIGHT_UI_BACKEND=deployed uv run finsight ui` - web UI with login, using the deployed agent
 - `uv run uvicorn finsight.api:app --host 127.0.0.1 --port 8080` - web API locally
@@ -52,6 +54,11 @@ changes, keep steps small, and prefer simple, readable code over clever abstract
   labels, syncs, and searches with ticker (+ optional section) filters. `finsight index` prepares
   companies ahead. The `search_filings` tool is offered only when FINSIGHT_KB_ID is set
   (tools.available_tools()); its passages become guardrail grounding evidence
+- Pillar 3: pillar3.py reads KM1 + TLAC tables from Morgan Stanley's public reports by word
+  position (values belong to the header they right-align with; blank quarters exist), each
+  rule from a real report. PDFs are pinned by SHA-256 in REPORTS; unaligned values or missing
+  metrics fail the build. The `get_key_metrics` tool only reads the committed JSON (pdfplumber
+  is in the `reports` group, not in the image). Public reports only - no internal data
 - Evals: evals/number_accuracy (cases frozen in cases.jsonl; grading.py programmatic + Haiku
   judge for traps; run_eval.py writes .claude/hillclimb/number_accuracy/<variant>/). The runner
   refuses to run after harness changes until the USER runs --approve-harness - never approve
