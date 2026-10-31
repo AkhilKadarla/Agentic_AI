@@ -56,6 +56,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     index_cmd.add_argument("tickers", nargs="*", help="e.g. TSLA AAPL")
     index_cmd.add_argument("--list", action="store_true", help="show what is indexed")
+    commands.add_parser(
+        "pillar3", help="download the Pillar 3 reports and rebuild the key metrics file"
+    )
     traces_cmd = commands.add_parser("traces", help="list recent traces, or show one step by step")
     traces_cmd.add_argument("trace_id", nargs="?", help="show this trace (first few characters)")
     traces_cmd.add_argument("--limit", type=int, default=15)
@@ -72,6 +75,8 @@ def main(argv: list[str] | None = None) -> None:
         return show_traces(args.trace_id, args.limit)
     if args.command == "index":
         return index(args.tickers, show_list=args.list)
+    if args.command == "pillar3":
+        return build_pillar3()
     if args.command == "remote":
         return remote_chat()
     if args.command == "mcp":
@@ -166,6 +171,22 @@ def index(tickers: list[str], show_list: bool = False) -> None:
         )
     except knowledge_base.KnowledgeBaseError as e:
         raise SystemExit(str(e)) from None
+
+
+def build_pillar3() -> None:
+    """Rebuild src/finsight/data/pillar3_key_metrics.json from the published reports."""
+    import httpx
+
+    from finsight import pillar3
+
+    print(f"Reading {len(pillar3.REPORTS)} reports (PDFs are kept in {pillar3.REPORTS_DIR}/)...")
+    try:
+        # A plain client: the SEC client's User-Agent carries your email, which only SEC needs
+        with httpx.Client(timeout=60, follow_redirects=True) as http:
+            count = pillar3.build(http)
+    except (pillar3.Pillar3Error, httpx.HTTPError) as e:
+        raise SystemExit(f"Pillar 3 build failed: {e}") from None
+    print(f"Wrote {count} values to {pillar3.METRICS_FILE} - review the diff before committing.")
 
 
 def chat(agent: ResearchAgent | None = None, read=input, label: str | None = None) -> None:
