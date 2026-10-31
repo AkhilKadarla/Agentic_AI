@@ -10,7 +10,7 @@ import pytest
 from mcp import Client
 
 from finsight import config, mcp_server
-from finsight.tools import SEARCH_FILINGS_TOOL, TOOLS
+from finsight.tools import SEARCH_FILINGS_TOOL, SEARCH_REPORTS_TOOL, TOOLS
 
 
 def call(server, method: str, *args, **kwargs):
@@ -61,12 +61,15 @@ def test_offers_the_tools_read_only():
     assert tools["get_key_metrics"].annotations.open_world_hint is False
 
 
-def test_offers_10k_search_only_with_a_knowledge_base(monkeypatch):
+def test_offers_text_search_only_with_a_knowledge_base(monkeypatch):
     monkeypatch.setattr(config, "KB_ID", "kb123")
-    assert "search_filings" in tools_by_name(mcp_server.build_server())
+    tools = tools_by_name(mcp_server.build_server())
+    assert "search_filings" in tools and "search_reports" in tools
 
 
-@pytest.mark.parametrize("definition", [*TOOLS, SEARCH_FILINGS_TOOL], ids=lambda t: t["name"])
+@pytest.mark.parametrize(
+    "definition", [*TOOLS, SEARCH_FILINGS_TOOL, SEARCH_REPORTS_TOOL], ids=lambda t: t["name"]
+)
 def test_mcp_tools_match_the_agent_tool_definitions(definition, monkeypatch):
     # The agent (tools.py) and MCP clients must see the same tools: same description, same
     # parameters, same required ones, same allowed values. This fails if they drift apart.

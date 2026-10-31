@@ -284,3 +284,28 @@ def test_key_metrics_for_a_year_come_from_that_years_report() -> None:
 def test_key_metrics_for_an_unknown_year_lists_what_is_available() -> None:
     with pytest.raises(Pillar3Error, match="MSI Group 2022, 2023"):
         pillar3.key_metrics("MSI Group", 2019)
+
+
+# ---------- report text for the Knowledge Base ----------
+
+
+def test_report_pages_keep_the_body_with_its_chapters() -> None:
+    texts = [
+        "Pillar 3 Regulatory Disclosure (UK)\nMorgan Stanley International",  # cover
+        "Pillar 3 Regulatory Disclosure (UK): Index\nTable 1 ..... 6",
+        "Pillar 3 Regulatory Disclosure (EU): 1. Overview and Key Metrics\nThe MSI Group...\n"
+        "Page | 3",
+        "Table 40 (continued) NSFR\n$MM a b",  # a table page without the running header
+        "Pillar 3 Regulatory Disclosure (UK): Leverage\nThe leverage ratio fell.\nPage | 5",
+        "Pillar 3 Regulatory Disclosure (UK): Appendix I: Board of Directors\nNames",
+        "Pillar 3 Regulatory Disclosure (UK): Abbreviations\nAT1 Additional Tier 1",
+    ]
+
+    pages = pillar3.report_pages(texts)
+
+    assert [(p.number, p.chapter) for p in pages] == [
+        (3, "Overview and Key Metrics"),  # numbering removed
+        (4, "Overview and Key Metrics"),  # inherits the chapter before
+        (5, "Leverage"),
+    ]  # stops at the first appendix
+    assert pages[2].text == "The leverage ratio fell."  # running header and footer removed

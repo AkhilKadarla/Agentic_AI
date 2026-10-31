@@ -56,8 +56,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     index_cmd.add_argument("tickers", nargs="*", help="e.g. TSLA AAPL")
     index_cmd.add_argument("--list", action="store_true", help="show what is indexed")
-    commands.add_parser(
+    pillar3_cmd = commands.add_parser(
         "pillar3", help="download the Pillar 3 reports and rebuild the key metrics file"
+    )
+    pillar3_cmd.add_argument(
+        "--index", action="store_true", help="also add the reports' text to the Knowledge Base"
     )
     traces_cmd = commands.add_parser("traces", help="list recent traces, or show one step by step")
     traces_cmd.add_argument("trace_id", nargs="?", help="show this trace (first few characters)")
@@ -76,7 +79,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "index":
         return index(args.tickers, show_list=args.list)
     if args.command == "pillar3":
-        return build_pillar3()
+        return build_pillar3(index=args.index)
     if args.command == "remote":
         return remote_chat()
     if args.command == "mcp":
@@ -173,11 +176,12 @@ def index(tickers: list[str], show_list: bool = False) -> None:
         raise SystemExit(str(e)) from None
 
 
-def build_pillar3() -> None:
-    """Rebuild src/finsight/data/pillar3_key_metrics.json from the published reports."""
+def build_pillar3(index: bool = False) -> None:
+    """Rebuild src/finsight/data/pillar3_key_metrics.json from the published reports, and
+    with `index`, upload each report's body pages to the Knowledge Base and sync."""
     import httpx
 
-    from finsight import pillar3
+    from finsight import knowledge_base, pillar3
 
     print(f"Reading {len(pillar3.REPORTS)} reports (PDFs are kept in {pillar3.REPORTS_DIR}/)...")
     try:
@@ -187,6 +191,24 @@ def build_pillar3() -> None:
     except (pillar3.Pillar3Error, httpx.HTTPError) as e:
         raise SystemExit(f"Pillar 3 build failed: {e}") from None
     print(f"Wrote {count} values to {pillar3.METRICS_FILE} - review the diff before committing.")
+    if not index:
+        return
+    try:
+        knowledge_base.require_config()
+        for report in pillar3.REPORTS:
+            path = pillar3.REPORTS_DIR / report.filename  # downloaded and checked by build()
+            pages = pillar3.report_pages(pillar3.page_texts(path))
+            knowledge_base.upload_report_pages(report, pages)
+            print(f"  {report.title}: {len(pages)} pages (p{pages[0].number}-{pages[-1].number})")
+        print("Syncing the Knowledge Base (chunking + embedding; usually 1-5 minutes)...")
+        stats = knowledge_base.sync()
+    except knowledge_base.KnowledgeBaseError as e:
+        raise SystemExit(str(e)) from None
+    print(
+        f"Done: {stats.get('numberOfNewDocumentsIndexed', 0)} new, "
+        f"{stats.get('numberOfModifiedDocumentsIndexed', 0)} updated, "
+        f"{stats.get('numberOfDocumentsFailed', 0)} failed."
+    )
 
 
 def chat(agent: ResearchAgent | None = None, read=input, label: str | None = None) -> None:

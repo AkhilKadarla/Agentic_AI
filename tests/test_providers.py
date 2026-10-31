@@ -133,11 +133,11 @@ def test_describe_shows_provider_region_and_model(monkeypatch) -> None:
     assert providers.describe() == "bedrock (us-east-1) / us.anthropic.claude-sonnet-4-6"
 
 
-def test_agent_offers_search_filings_when_knowledge_base_is_configured(monkeypatch) -> None:
+def test_agent_offers_text_search_when_knowledge_base_is_configured(monkeypatch) -> None:
     monkeypatch.setattr(config, "KB_ID", "KB123")
     client = scripted_client(FakeStream([text_block("ok")], "end_turn"))
 
     list(ResearchAgent(client=client).send("hi"))
 
     tools = client.beta.messages.stream.call_args.kwargs["tools"]
-    assert [t["name"] for t in tools][-1] == "search_filings"
+    assert [t["name"] for t in tools][-2:] == ["search_filings", "search_reports"]

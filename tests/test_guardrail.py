@@ -328,6 +328,29 @@ def test_cli_describes_each_report_kind() -> None:
     assert "UNVERIFIED" in describe_report(GuardrailReport(error="down"))
 
 
+def test_readable_source_for_report_passages() -> None:
+    result = json.dumps(
+        {
+            "query": "leverage",
+            "passages": [
+                {
+                    "report": "MSI Group Pillar 3 Disclosure Report, 31 December 2023",
+                    "chapter": "Leverage",
+                    "page": 31,
+                    "relevance": 0.7,
+                    "text": "The leverage ratio increased.",
+                    "source_url": "https://www.morganstanley.com/x.pdf",
+                }
+            ],
+        }
+    )
+
+    assert readable_source("search_reports", result) == (
+        "From the MSI Group Pillar 3 Disclosure Report, 31 December 2023, Leverage chapter, "
+        "page 31: The leverage ratio increased."
+    )
+
+
 def test_readable_source_for_pillar3_key_metrics() -> None:
     result = json.dumps(
         {

@@ -216,6 +216,11 @@ def _readable(tool_name: str, data: dict) -> str:
             f"section: {p['text']}"
             for p in data["passages"]
         )
+    if tool_name == "search_reports":
+        return "\n".join(
+            f"From the {p['report']}, {p['chapter']} chapter, page {p['page']}: {p['text']}"
+            for p in data["passages"]
+        )
     if tool_name == "get_key_metrics":  # Pillar 3 values, each with where it is printed
         lines = [
             f"{data['entity']} {m['name']} as at {_written(v['period'])}: "

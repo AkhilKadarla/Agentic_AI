@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from finsight import config
+from finsight import config, pillar3
 from finsight import knowledge_base as kb
 from finsight.filings import Filing10K, Section
 
@@ -144,4 +144,66 @@ def test_search_can_be_limited_to_one_section() -> None:
             {"equals": {"key": "ticker", "value": "TSLA"}},
             {"equals": {"key": "section", "value": "mdna"}},
         ]
+    }
+
+
+def test_report_pages_are_uploaded_with_pillar3_labels() -> None:
+    s3 = MagicMock()
+    report = pillar3.REPORTS[-1]  # MSI Group 2023
+    page = pillar3.ReportPage(31, "Leverage", "The leverage ratio increased.")
+
+    keys = kb.upload_report_pages(report, [page], s3=s3)
+
+    assert keys == ["regulatory/pillar3/MSI_Group/2023/page-031.txt"]
+    text_call, label_call = [c.kwargs for c in s3.put_object.call_args_list]
+    assert text_call["Body"].decode() == (
+        "MSI Group Pillar 3 Disclosure Report, 31 December 2023 - Leverage - page 31\n\n"
+        "The leverage ratio increased."
+    )
+    labels = json.loads(label_call["Body"])["metadataAttributes"]
+    assert labels["source_type"] == "pillar3"
+    assert labels["report_group"] == "MSI Group"
+    assert (labels["report_year"], labels["page"]) == (2023, 31)  # numbers: filterable
+    assert "ticker" not in labels  # so 10-K searches (filtered by ticker) never see it
+
+
+def test_search_reports_filters_to_pillar3_and_maps_results() -> None:
+    runtime = MagicMock()
+    runtime.retrieve.return_value = {
+        "retrievalResults": [
+            {
+                "content": {"text": "TLAC available increased."},
+                "score": 0.61,
+                "metadata": {
+                    "report": "MSI Group Pillar 3 Disclosure Report, 31 December 2023",
+                    "chapter": "Total Loss-Absorbing Capacity",
+                    "page": 27.0,  # numbers come back as floats
+                    "source_url": "https://www.morganstanley.com/x.pdf",
+                },
+            }
+        ]
+    }
+
+    [passage] = kb.search_reports("why did TLAC rise", "MSI Group", 2023, runtime=runtime)
+
+    config_ = runtime.retrieve.call_args.kwargs["retrievalConfiguration"]
+    assert config_["vectorSearchConfiguration"]["filter"] == {
+        "andAll": [
+            {"equals": {"key": "source_type", "value": "pillar3"}},
+            {"equals": {"key": "report_group", "value": "MSI Group"}},
+            {"equals": {"key": "report_year", "value": 2023}},
+        ]
+    }
+    assert (passage.page, passage.chapter) == (27, "Total Loss-Absorbing Capacity")
+
+
+def test_search_reports_without_filters_still_only_searches_pillar3() -> None:
+    runtime = MagicMock()
+    runtime.retrieve.return_value = {"retrievalResults": []}
+
+    kb.search_reports("liquidity risk", runtime=runtime)
+
+    config_ = runtime.retrieve.call_args.kwargs["retrievalConfiguration"]
+    assert config_["vectorSearchConfiguration"]["filter"] == {
+        "equals": {"key": "source_type", "value": "pillar3"}
     }

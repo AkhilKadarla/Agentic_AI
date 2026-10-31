@@ -154,3 +154,31 @@ def test_get_key_metrics_for_a_missing_year_is_reported_as_error() -> None:
     assert is_error
     assert "No key metrics for MSESE Consol in 2022" in result
     assert "MSESE Consol 2023" in result  # tells Claude what it can ask for instead
+
+
+def test_search_reports_returns_passages_with_page(monkeypatch) -> None:
+    from finsight.knowledge_base import ReportPassage
+
+    calls = []
+
+    def fake_search(query, report_group=None, year=None):
+        calls.append((query, report_group, year))
+        return [ReportPassage("Leverage fell.", 0.7, "MSI Group report", "Leverage", 31, "u")]
+
+    monkeypatch.setattr("finsight.knowledge_base.search_reports", fake_search)
+
+    result, is_error = run_tool("search_reports", {"query": "leverage", "year": 2023})
+
+    assert not is_error
+    assert calls == [("leverage", None, 2023)]
+    [p] = json.loads(result)["passages"]
+    assert (p["chapter"], p["page"], p["relevance"]) == ("Leverage", 31, 0.7)
+
+
+def test_search_reports_with_nothing_indexed_says_how_to_index(monkeypatch) -> None:
+    monkeypatch.setattr("finsight.knowledge_base.search_reports", lambda *a, **k: [])
+
+    result, is_error = run_tool("search_reports", {"query": "liquidity"})
+
+    assert is_error
+    assert "finsight pillar3 --index" in result

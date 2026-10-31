@@ -8,8 +8,8 @@ them (names, descriptions, input schemas) and call them over the protocol.
 
 What this server offers:
   tools      get_company_filings, get_financial_facts, get_key_metrics (Pillar 3), and
-             search_filings (10-K text) when FINSIGHT_KB_ID is set - the same code the agent
-             runs (tools.run_tool)
+             search_filings (10-K text) + search_reports (Pillar 3 text) when FINSIGHT_KB_ID
+             is set - the same code the agent runs (tools.run_tool)
   resource   finsight://metrics - the metrics get_financial_facts understands
   prompt     research_company - FinSight's research approach for one company
 
@@ -27,10 +27,18 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from finsight import __version__, config, pillar3, sec
-from finsight.tools import FORM_TYPES, SEARCH_FILINGS_TOOL, TOOLS, run_tool
+from finsight.tools import (
+    FORM_TYPES,
+    SEARCH_FILINGS_TOOL,
+    SEARCH_REPORTS_TOOL,
+    TOOLS,
+    run_tool,
+)
 
 # One source of truth: the descriptions Claude sees in the agent are the ones MCP clients see.
-DESCRIPTIONS = {tool["name"]: tool["description"] for tool in [*TOOLS, SEARCH_FILINGS_TOOL]}
+DESCRIPTIONS = {
+    tool["name"]: tool["description"] for tool in [*TOOLS, SEARCH_FILINGS_TOOL, SEARCH_REPORTS_TOOL]
+}
 
 # Tells clients these tools only read data (safe to call without asking) and reach the
 # outside world (SEC EDGAR, the Knowledge Base).
@@ -56,6 +64,7 @@ Ticker = Annotated[str, Field(description="Stock ticker, e.g. AAPL")]
 FormType = Literal[tuple(FORM_TYPES)]
 Metric = Literal[tuple(sec.METRICS)]
 Entity = Literal[tuple(pillar3.ENTITIES)]
+ReportGroup = Literal[tuple(sorted({r.group for r in pillar3.REPORTS}))]
 
 
 def _run(name: str, **tool_input) -> str:
@@ -106,6 +115,19 @@ def build_server() -> MCPServer:
             ] = None,
         ) -> str:
             return _run("search_filings", ticker=ticker, query=query, section=section)
+
+        @server.tool(description=DESCRIPTIONS["search_reports"], **TOOL_OPTIONS)
+        def search_reports(
+            query: Annotated[str, Field(description="What to look for, in plain words")],
+            report_group: Annotated[
+                ReportGroup | None,
+                Field(description="Only search this group's reports; omit to search all"),
+            ] = None,
+            year: Annotated[
+                int | None, Field(description="Only the report as at 31 December of this year")
+            ] = None,
+        ) -> str:
+            return _run("search_reports", query=query, report_group=report_group, year=year)
 
     @server.resource(
         "finsight://metrics",

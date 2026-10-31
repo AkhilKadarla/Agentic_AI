@@ -7,6 +7,8 @@ ratio) for the last five quarters; TLAC (loss-absorbing capacity) has a small ta
   build  : download the PDFs (checked against pinned SHA-256 hashes) -> read the tables
            -> src/finsight/data/pillar3_key_metrics.json, reviewed in git like code
   lookup : the get_key_metrics tool reads that file - no PDF parsing at question time
+  text   : report_pages() gives each body page's text and chapter, for the Knowledge Base
+           (knowledge_base.upload_report_pages): passages for "why" questions, cited by page
 
 Tables are read by word *position*, not as plain text. Each rule comes from a real report:
   - rows can leave quarters blank and plain text silently drops the gaps (MSEHSE 2023 KM1:
@@ -320,6 +322,48 @@ def page_words(path: Path) -> list[list[dict]]:
 
     with pdfplumber.open(path) as pdf:
         return [page.extract_words() for page in pdf.pages]
+
+
+# Every body page starts with "Pillar 3 Regulatory Disclosure (UK): <chapter>"; pages that
+# are one big table don't, and belong to the chapter before. The chapter is sometimes
+# numbered ("1. Overview and Key Metrics", MSEHSE 2022).
+RUNNING_HEADER = re.compile(r"^Pillar 3 Regulatory Disclosure \((?:EU|UK)\)(?::\s*(.*))?$")
+FOOTER = re.compile(r"^Page \| \d+$")
+
+
+@dataclass
+class ReportPage:
+    number: int
+    chapter: str
+    text: str
+
+
+def report_pages(texts: list[str]) -> list[ReportPage]:
+    """The body of a report, page by page with its chapter: from the first chapter after the
+    index up to the first appendix (templates, CRR mapping tables, abbreviations, and in MSI
+    2023 the financial statements - mostly noise for a search by meaning)."""
+    pages, chapter = [], None
+    for number, text in enumerate(texts, start=1):
+        lines = text.splitlines()
+        header = RUNNING_HEADER.match(lines[0]) if lines else None
+        if header:
+            chapter = re.sub(r"^\d+\.\s*", "", header.group(1) or "").strip() or None
+            lines = lines[1:]
+        if chapter and chapter.startswith("Appendix"):
+            break
+        if chapter in (None, "Index"):  # the cover page and the table of contents
+            continue
+        body = "\n".join(line for line in lines if not FOOTER.match(line)).strip()
+        if body:
+            pages.append(ReportPage(number, chapter, body))
+    return pages
+
+
+def page_texts(path: Path) -> list[str]:
+    import pdfplumber
+
+    with pdfplumber.open(path) as pdf:
+        return [page.extract_text() or "" for page in pdf.pages]
 
 
 def build(http: httpx.Client, folder: Path = REPORTS_DIR, out: Path = METRICS_FILE) -> int:

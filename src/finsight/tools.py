@@ -132,10 +132,43 @@ SEARCH_FILINGS_TOOL = {
 }
 
 
+SEARCH_REPORTS_TOOL = {
+    "name": "search_reports",
+    "description": (
+        "Search the text of Morgan Stanley's public Pillar 3 disclosure reports for passages "
+        "relevant to a question, ranked by meaning. Use it for qualitative questions: why a "
+        "ratio or RWAs changed, how a risk is managed, which requirements apply, capital "
+        "actions. Report groups: 'MSEHSE Group' (EU; also covers MSESE) and 'MSI Group' (UK; "
+        "also covers MSIP), as at 31 December 2022 and 2023. Returns up to 5 passages with "
+        "the report, chapter and page to cite. Tables inside passages are flattened text whose "
+        "columns are unreliable: for capital, RWA, leverage and TLAC figures use "
+        "get_key_metrics instead."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "What to look for, in plain words"},
+            "report_group": {
+                "type": "string",
+                "enum": sorted({r.group for r in pillar3.REPORTS}),
+                "description": "Only search this group's reports. Omit to search all.",
+            },
+            "year": {
+                "type": "integer",
+                "description": "Only search the report as at 31 December of this year.",
+            },
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
+
 def available_tools() -> list[dict]:
-    """The tools to offer Claude: the SEC tools, plus 10-K text search when a Knowledge
-    Base is configured (FINSIGHT_KB_ID)."""
-    return [*TOOLS, SEARCH_FILINGS_TOOL] if config.KB_ID else TOOLS
+    """The tools to offer Claude: the SEC and Pillar 3 metrics tools, plus 10-K and Pillar 3
+    text search when a Knowledge Base is configured (FINSIGHT_KB_ID)."""
+    return [*TOOLS, SEARCH_FILINGS_TOOL, SEARCH_REPORTS_TOOL] if config.KB_ID else TOOLS
 
 
 def run_tool(name: str, tool_input: dict, http: httpx.Client | None = None) -> tuple[str, bool]:
@@ -146,6 +179,8 @@ def run_tool(name: str, tool_input: dict, http: httpx.Client | None = None) -> t
     """
     if name == "search_filings":
         return _search_filings(tool_input)
+    if name == "search_reports":
+        return _search_reports(tool_input)
     if name == "get_key_metrics":  # reads the bundled Pillar 3 data file: no network
         try:
             result = pillar3.key_metrics(tool_input["entity"], int(tool_input["year"]))
@@ -193,6 +228,37 @@ def _search_filings(tool_input: dict) -> tuple[str, bool]:
                 {
                     "section": p.section,
                     "fiscal_year_end": p.fiscal_year_end,
+                    "relevance": round(p.score, 2),
+                    "text": p.text,
+                    "source_url": p.source_url,
+                }
+                for p in passages
+            ],
+        }
+    ), False
+
+
+def _search_reports(tool_input: dict) -> tuple[str, bool]:
+    try:
+        passages = knowledge_base.search_reports(
+            tool_input["query"], tool_input.get("report_group"), tool_input.get("year")
+        )
+    except (knowledge_base.KnowledgeBaseError, BotoCoreError, ClientError) as e:
+        return f"Pillar 3 report search failed: {e}", True
+    if not passages:
+        return (
+            "No Pillar 3 report text matched. Tell the user the reports can be indexed with: "
+            "finsight pillar3 --index",
+            True,
+        )
+    return json.dumps(
+        {
+            "query": tool_input["query"],
+            "passages": [
+                {
+                    "report": p.report,
+                    "chapter": p.chapter,
+                    "page": p.page,
                     "relevance": round(p.score, 2),
                     "text": p.text,
                     "source_url": p.source_url,
