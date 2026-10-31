@@ -6,35 +6,35 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic[bedrock]>=1.8.0",
+    "anthropic[bedrock]>=1.15.0",
     "beautifulsoup4>=4.15.0",
-    "fastapi>=0.141.1",
+    "fastapi>=0.149.0",
     "httpx>=0.28.1",
     "lxml>=6.1.3",
-    "mcp>=2.2.0",
+    "mcp>=2.3.0",
     "opentelemetry-api>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
-    "pydantic>=2.13.5",
-    "python-dotenv>=1.2.3",
-    "uvicorn[standard]>=0.53.0",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [project.scripts]
 finsight = "finsight.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.12.18,<0.13.0"]
+requires = ["uv_build>=0.13.1,<0.14.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 cloud = [
-    "aws-opentelemetry-distro>=0.20.0",
+    "aws-opentelemetry-distro>=0.21.0",
 ]
 dev = [
-    "pre-commit>=4.6.2",
+    "pre-commit>=4.7.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.8",
+    "ruff>=0.17.1",
     "watchdog>=6.0.0",
 ]
 reports = [
@@ -42,7 +42,7 @@ reports = [
 ]
 ui = [
     "altair>=6.3.0",
-    "streamlit>=1.64.0",
+    "streamlit>=1.66.0",
 ]
 
 # ---------- Tool configuration ----------
