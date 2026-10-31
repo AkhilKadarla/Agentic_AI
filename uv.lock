@@ -674,7 +674,7 @@ wheels = [
 name = "finsight"
 version = "0.1.0"
 source = { editable = "." }
-default-groups = ["dev", "ui"]
+default-groups = ["dev", "reports", "ui"]
 dependencies = [
     { name = "anthropic", extra = ["bedrock"] },
     { name = "beautifulsoup4" },
