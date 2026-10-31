@@ -1,0 +1,35 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor the capital, leverage or TLAC figures of Morgan Stanley's regulated entities, use the\nPillar 3 key metrics tool, quote values exactly as printed and cite the report and page.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was Apple's revenue in 2024?"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"AAPL\",\n  \"metric\": \"revenue\",\n  \"years\": 1\n}",
+  "thinking": "The user wants Apple's revenue in 2024. Let me fetch that data."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"Apple Inc.\", \"ticker\": \"AAPL\", \"metric\": \"revenue\", \"xbrl_concept\": \"RevenueFromContractWithCustomerExcludingAssessedTax\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2025-09-27\", \"value\": 416161000000, \"filed\": \"2025-10-31\"}]}"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"AAPL\",\n  \"metric\": \"revenue\",\n  \"years\": 2\n}",
+  "thinking": "The data returned is for fiscal year ending 2025-09-27, not 2024. Let me fetch more years to get the fiscal year 2024 data."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"Apple Inc.\", \"ticker\": \"AAPL\", \"metric\": \"revenue\", \"xbrl_concept\": \"RevenueFromContractWithCustomerExcludingAssessedTax\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2025-09-27\", \"value\": 416161000000, \"filed\": \"2025-10-31\"}, {\"period_end\": \"2024-09-28\", \"value\": 391035000000, \"filed\": \"2025-10-31\"}]}"
+ },
+ {
+  "role": "assistant",
+  "content": "**Apple's revenue for fiscal year 2024 was $391.04 billion.**\n\nHere are the key details:\n\n| Fiscal Year | Period End | Revenue |\n|---|---|---|\n| FY 2024 | September 28, 2024 | **$391.04 billion** |\n\nA couple of important notes:\n- **Apple's fiscal year** runs from late September to late September, so \"FY 2024\" ended on **September 28, 2024** \u2014 not December 31.\n- This figure comes directly from Apple's **10-K filing** with the SEC, as reported under XBRL data.\n\nFor context, Apple's most recently reported fiscal year (FY 2025, ending September 27, 2025) came in even higher at **$416.16 billion**, representing roughly a **6.4% year-over-year increase**.\n\n> *This is financial data for educational purposes and does not constitute investment advice.*",
+  "thinking": "Apple's fiscal year 2024 ended on September 28, 2024, and their revenue was $391,035,000,000, or approximately $391 billion."
+ }
+]
