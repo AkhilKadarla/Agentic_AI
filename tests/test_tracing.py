@@ -138,6 +138,16 @@ def test_retention_deletes_only_old_trace_files(tmp_path) -> None:
     assert recent.exists() and other.exists()
 
 
+def test_retention_skips_a_file_another_process_already_deleted(tmp_path) -> None:
+    # The eval runs agents in parallel: each lists the folder, and another one can delete an
+    # expired file between this one's listing and its own delete. Replayed deterministically:
+    # the listing still contains a file that is already gone.
+    gone = tmp_path / f"{(date.today() - timedelta(days=31)).isoformat()}.jsonl"
+    stale_listing = MagicMock(glob=lambda pattern: [gone])
+
+    assert tracing.delete_old_traces(stale_listing, retention_days=30) == []
+
+
 def test_summary_and_tree_rendering(spans) -> None:
     client = scripted_client(
         FakeStream([tool_use_block("get_financial_facts", {"ticker": "AAPL"})], "tool_use"),

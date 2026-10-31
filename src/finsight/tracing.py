@@ -77,7 +77,10 @@ def delete_old_traces(directory: Path, retention_days: int) -> list[Path]:
         except ValueError:
             continue  # not a trace file
         if day < cutoff:
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue  # another process deleted it first (parallel eval agents)
             removed.append(path)
     return removed
 
