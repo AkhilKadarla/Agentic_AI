@@ -39,6 +39,14 @@ def test_case_file_is_well_formed() -> None:
         assert c["expected"] and c["inputs"], c["id"]
 
 
+def test_number_questions_name_their_period() -> None:
+    """Expected values are frozen, so "latest year" questions break when a company files a
+    new 10-K (Costco's FY2026 10-K did this). Questions with an answer key name the year."""
+    for c in NUMBER_CASES:
+        question = c["question"].lower()
+        assert "latest" not in question and "most recent" not in question, c["id"]
+
+
 @pytest.mark.parametrize("case", NUMBER_CASES, ids=lambda c: c["id"])
 def test_oracle_answer_passes(case) -> None:
     answer = "Here are the figures: " + "; ".join(say(e) for e in case["expected"])
