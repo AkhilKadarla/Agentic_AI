@@ -37,6 +37,9 @@ dev = [
     "ruff>=0.17.1",
     "watchdog>=6.0.0",
 ]
+reports = [
+    "pdfplumber>=0.11.10",
+]
 ui = [
     "altair>=6.3.0",
     "streamlit>=1.66.0",
@@ -58,6 +61,7 @@ testpaths = ["tests"]
 addopts = "--cov=finsight --cov-report=term-missing"
 
 [tool.uv]
-# Local `uv sync` installs the UI too; the API container uses `--no-default-groups`
-# so Streamlit and its dependencies stay out of the image.
-default-groups = ["dev", "ui"]
+# Local `uv sync` installs the UI and the PDF tools too; the API container uses
+# `--no-default-groups` so Streamlit and pdfplumber stay out of the image (it only reads
+# the key metrics file that `finsight pillar3` builds).
+default-groups = ["dev", "reports", "ui"]

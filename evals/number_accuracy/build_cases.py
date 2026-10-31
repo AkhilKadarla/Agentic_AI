@@ -252,5 +252,120 @@ add(
     "XOM now maps to a new holding company with no 10-K data yet; memory would be a guess",
 )
 
+# --- Pillar 3 key metrics (Morgan Stanley's public reports) ---
+# Expected values were read by hand from the reports' page text, NOT from FinSight's parser
+# (src/finsight/data/pillar3_key_metrics.json), so a parser bug can't change the answer key.
+# Amounts are in full units (the reports print millions).
+P3_EU_2023 = "MSEHSE Group Pillar 3 Disclosure Report, 31 December 2023"
+P3_UK_2023 = "MSI Group Pillar 3 Disclosure Report, 31 December 2023"
+
+
+def p3(label: str, value: float, unit: str, source: str) -> dict:
+    """Tolerances allow normal rounding ("23.3%" for 23.29%, "EUR 6.2 billion" for 6,192MM)
+    but stay well below the gap to the neighbouring quarter's value (>= 0.6 points, >= 2%),
+    so reading the wrong column always fails."""
+    return derived(label, value, unit, source, 0.05 if unit == "%" else 0.005)
+
+
+add(
+    "p3_msehse_cet1_ratio",
+    "pillar3",
+    "What was the CET1 ratio of the Morgan Stanley Europe Holding SE (MSEHSE) Group at "
+    "31 December 2023?",
+    [p3("MSEHSE CET1 ratio", 23.29, "%", f"{P3_EU_2023}, EU KM1 row 5, Q4'23, page 6")],
+)
+add(
+    "p3_msi_rwa",
+    "pillar3",
+    "What were the total risk-weighted assets (RWAs) of the Morgan Stanley International "
+    "(MSI) Group at 31 December 2023?",
+    [p3("MSI Group RWAs", 155_523e6, "USD", f"{P3_UK_2023}, UK KM1 row 4, Q4'23, page 6")],
+)
+add(
+    "p3_msi_tlac",
+    "pillar3",
+    "How much TLAC did the MSI Group have available at 31 December 2023, and what was that "
+    "as a percentage of its RWAs?",
+    [
+        p3("MSI TLAC available", 45_292e6, "USD", f"{P3_UK_2023}, TLAC Key Metrics, page 27"),
+        p3("MSI TLAC % of RWAs", 29.12, "%", f"{P3_UK_2023}, TLAC Key Metrics, page 27"),
+    ],
+)
+add(
+    "p3_msip_cet1_ratio",
+    "pillar3",
+    "What was the CET1 ratio of Morgan Stanley & Co. International plc (MSIP) at the end of 2023?",
+    [p3("MSIP CET1 ratio", 14.85, "%", f"{P3_UK_2023}, UK KM1 (MSIP) row 5, Q4'23, page 7")],
+)
+add(
+    "p3_msehse_q2_cet1",
+    "pillar3",
+    "According to its Pillar 3 report as at 31 December 2023, what was the MSEHSE Group's "
+    "CET1 capital at 30 June 2023?",
+    [p3("MSEHSE CET1 capital Q2'23", 6_192e6, "EUR", f"{P3_EU_2023}, EU KM1 row 1, page 6")],
+    "the middle of 3 values under 5 quarter columns: plain text makes it look like Q3'23",
+)
+add(
+    "p3_msehse_q3_blank",
+    "pillar3",
+    "According to the MSEHSE Group's Pillar 3 report as at 31 December 2023, what was its "
+    "CET1 capital at 30 September 2023?",
+    [],
+    "that report's KM1 leaves the Q3'23 column blank (values for Q4'23, Q2'23 and Q4'22 "
+    "only); 6,192 is the Q2'23 figure, which a flattened reading of the table gives as Q3. "
+    "A separate Q3 2023 report exists but is not in FinSight.",
+)
+add(
+    "p3_msese_cet1",
+    "pillar3",
+    "What was the CET1 capital of MSESE Consol (Morgan Stanley Europe SE, consolidated) at "
+    "31 December 2023, in euros?",
+    [p3("MSESE Consol CET1 capital", 5_998e6, "EUR", f"{P3_EU_2023}, EU KM1 row 1, page 8")],
+)
+add(
+    "p3_msi_cet1_2y",
+    "pillar3",
+    "How did the MSI Group's CET1 ratio change between 31 December 2022 and 31 December 2023?",
+    [
+        p3("MSI CET1 ratio 2023", 16.01, "%", f"{P3_UK_2023}, UK KM1 row 5, Q4'23, page 6"),
+        p3("MSI CET1 ratio 2022", 14.35, "%", f"{P3_UK_2023}, UK KM1 row 5, Q4'22, page 6"),
+    ],
+)
+add(
+    "p3_msehse_leverage_2022",
+    "pillar3",
+    "What was the MSEHSE Group's leverage ratio at 31 December 2022?",
+    [
+        p3(
+            "MSEHSE leverage ratio 2022",
+            8.02,
+            "%",
+            "MSEHSE Group Pillar 3 Disclosure Report, 31 December 2022, EU KM1 row 14, page 6",
+        )
+    ],
+)
+add(
+    "p3_total_capital_comparison",
+    "pillar3",
+    "Which had the higher total capital ratio at 31 December 2023, the MSEHSE Group or the "
+    "MSI Group? Give both ratios.",
+    [
+        p3("MSEHSE total capital ratio", 30.62, "%", f"{P3_EU_2023}, EU KM1 row 7, page 6"),
+        p3("MSI total capital ratio", 23.08, "%", f"{P3_UK_2023}, UK KM1 row 7, page 6"),
+    ],
+)
+add(
+    "p3_msehse_tlac_2y",
+    "pillar3",
+    "What was the MSEHSE Group's TLAC available at 31 December 2023, and what was it a year "
+    "earlier?",
+    [
+        p3("MSEHSE TLAC 2023", 9_255e6, "EUR", f"{P3_EU_2023}, TLAC Key Metrics, page 27"),
+        p3("MSEHSE TLAC 2022", 8_091e6, "EUR", f"{P3_EU_2023}, TLAC Key Metrics, page 27"),
+    ],
+    "the report's text says TLAC rose by EUR 1,163MM, while the rounded table values differ "
+    "by 1,164: either is fine",
+)
+
 OUT.write_text("".join(json.dumps(c) + "\n" for c in cases))
 print(f"wrote {len(cases)} cases to {OUT}")

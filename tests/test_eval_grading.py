@@ -26,14 +26,15 @@ def say(e: dict, scale: float = 1.0) -> str:
     if e["unit"] == "%":
         return f"{e['value'] + (scale - 1) * 20:.1f}%"  # scale 1.05 -> one point off
     value = e["value"] * scale
-    if e["unit"] == "USD" and abs(value) >= 1e9:
-        return f"${value / 1e9:,.1f} billion"
-    return f"${value:,.2f}"
+    symbol = "€" if e["unit"] == "EUR" else "$"
+    if e["unit"] in ("USD", "EUR") and abs(value) >= 1e9:
+        return f"{symbol}{value / 1e9:,.1f} billion"
+    return f"{symbol}{value:,.2f}"
 
 
 def test_case_file_is_well_formed() -> None:
-    assert len(CASES) == 25
-    assert len({c["id"] for c in CASES}) == 25
+    assert len(CASES) == 36
+    assert len({c["id"] for c in CASES}) == 36
     for c in NUMBER_CASES:
         assert c["expected"] and c["inputs"], c["id"]
 
@@ -41,7 +42,9 @@ def test_case_file_is_well_formed() -> None:
 @pytest.mark.parametrize("case", NUMBER_CASES, ids=lambda c: c["id"])
 def test_oracle_answer_passes(case) -> None:
     answer = "Here are the figures: " + "; ".join(say(e) for e in case["expected"])
-    tool_results = [json.dumps({"values": [i["value"] for i in case["inputs"]]})]
+    # Percentages appear with their sign, as tools print them (get_key_metrics: "23.29%")
+    values = [f"{i['value']}%" if i["unit"] == "%" else i["value"] for i in case["inputs"]]
+    tool_results = [json.dumps({"values": values})]
 
     result = grade_numbers(case, answer, tool_results)
 
@@ -109,3 +112,50 @@ def test_numbers_in_reads_units() -> None:
         (26.9, "%"),
         (7.46, "plain"),
     ]
+
+
+EURO_CET1 = {"value": 6_192e6, "unit": "EUR", "tolerance": 0.005}
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["CET1 capital was €6,192 million.", "€6.19 billion", "| CET1 capital | 6,192 | (€MM)"],
+)
+def test_euro_formats_that_should_match(text) -> None:
+    assert value_present(EURO_CET1, text)
+
+
+def test_neighbouring_quarter_does_not_match() -> None:
+    # MSEHSE 2023 KM1: Q2'23 is 6,192, Q4'23 is 6,355 - the wrong column must fail.
+    assert not value_present(EURO_CET1, "CET1 capital was €6,355 million.")
+
+
+PILLAR3_TOOL_CALLS = {  # the get_key_metrics calls that answer each Pillar 3 case
+    "p3_msehse_cet1_ratio": [("MSEHSE Group", 2023)],
+    "p3_msi_rwa": [("MSI Group", 2023)],
+    "p3_msi_tlac": [("MSI Group", 2023)],
+    "p3_msip_cet1_ratio": [("MSIP", 2023)],
+    "p3_msehse_q2_cet1": [("MSEHSE Group", 2023)],
+    "p3_msese_cet1": [("MSESE Consol", 2023)],
+    "p3_msi_cet1_2y": [("MSI Group", 2023), ("MSI Group", 2022)],
+    "p3_msehse_leverage_2022": [("MSEHSE Group", 2022)],
+    "p3_total_capital_comparison": [("MSEHSE Group", 2023), ("MSI Group", 2023)],
+    "p3_msehse_tlac_2y": [("MSEHSE Group", 2023), ("MSEHSE Group", 2022)],
+}
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in NUMBER_CASES if "pillar3" in c["tags"]], ids=lambda c: c["id"]
+)
+def test_pillar3_answer_key_agrees_with_the_tool(case) -> None:
+    # Two independent paths to the same numbers: the answer key was read by hand from the
+    # PDFs, the tool's data comes from the parser. They must agree - this is also exactly
+    # the eval's "from the data" check, run here for free.
+    from finsight.tools import run_tool
+
+    results = [
+        run_tool("get_key_metrics", {"entity": entity, "year": year})[0]
+        for entity, year in PILLAR3_TOOL_CALLS[case["id"]]
+    ]
+
+    assert grade_numbers(case, "", results)["grade"]["from_data"] == 1.0

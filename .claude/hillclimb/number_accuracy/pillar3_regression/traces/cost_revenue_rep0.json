@@ -1,0 +1,25 @@
+[
+ {
+  "role": "system",
+  "content": "You are FinSight, a financial research analyst assistant.\nExplain financial concepts, companies, and filings clearly and accurately.\nWhen you are unsure or lack current data, say so instead of guessing.\nYou provide educational analysis, not investment advice.\n\nWhen a question is about a specific company, use your tools to get real data from SEC\nfilings rather than relying on memory. Plan which data you need, fetch it (in parallel\nwhen calls are independent), and base your answer on the fetched figures. State the fiscal\nperiods you are using and show key numbers, including any calculations you make.\n\nFor the capital, leverage or TLAC figures of Morgan Stanley's regulated entities, use the\nPillar 3 key metrics tool, quote values exactly as printed and cite the report and page.\n\nFor \"why\" questions, risks, and strategy, search the company's 10-K text when that tool is\navailable and cite what the filing says. If you add context that did not come from your\ntools, label it clearly as general background, not as a finding from the filings."
+ },
+ {
+  "role": "user",
+  "content": "What was Costco's revenue in its most recent fiscal year?"
+ },
+ {
+  "role": "tool_call",
+  "name": "get_financial_facts",
+  "content": "{\n  \"ticker\": \"COST\",\n  \"metric\": \"revenue\",\n  \"years\": 1\n}",
+  "thinking": "The user wants to know Costco's most recent fiscal year revenue. Let me fetch that data."
+ },
+ {
+  "role": "tool_result",
+  "content": "{\"company\": \"COSTCO WHOLESALE CORP /NEW\", \"ticker\": \"COST\", \"metric\": \"revenue\", \"xbrl_concept\": \"RevenueFromContractWithCustomerExcludingAssessedTax\", \"unit\": \"USD\", \"annual_values\": [{\"period_end\": \"2026-08-30\", \"value\": 303154000000, \"filed\": \"2026-10-07\"}]}"
+ },
+ {
+  "role": "assistant",
+  "content": "Based on data pulled directly from Costco's most recent 10-K filing, here are the details:\n\n- **Company:** Costco Wholesale Corp\n- **Fiscal Year End:** August 30, 2026\n- **Revenue:** **$303.15 billion**\n\nThis figure is reported as revenue from contracts with customers (excluding assessed tax), as filed with the SEC on October 7, 2026. Costco's fiscal year runs on a 52/53-week cycle ending in late August, which is why their fiscal year 2026 closes in August rather than December.\n\n> \ud83d\udccc *This is factual financial data from SEC filings, provided for educational purposes \u2014 not investment advice.*",
+  "thinking": "Costco's most recent fiscal year ended August 30, 2026 (fiscal year 2026), and their revenue was $303,154,000,000 ($303.154 billion)."
+ }
+]

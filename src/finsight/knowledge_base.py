@@ -7,6 +7,10 @@
 Each section is uploaded as `filings/<TICKER>/<fiscal-year-end>/<section>.txt` next to a
 `.metadata.json` "label" file. Labels are what let one store hold many companies: a
 search for Tesla only looks at chunks labelled ticker=TSLA.
+
+Pillar 3 reports share the store: one file per page under `regulatory/pillar3/`, labelled
+source_type=pillar3 (+ report group, year, chapter, page). 10-K searches filter on ticker
+and report searches on source_type, so neither can return the other's text.
 """
 
 import json
@@ -17,6 +21,7 @@ import boto3
 
 from finsight import config
 from finsight.filings import Filing10K
+from finsight.pillar3 import Report, ReportPage
 
 
 class KnowledgeBaseError(RuntimeError):
@@ -32,6 +37,18 @@ class Passage:
     ticker: str
     section: str
     fiscal_year_end: str
+    source_url: str
+
+
+@dataclass
+class ReportPassage:
+    """One chunk of a Pillar 3 report returned by a search."""
+
+    text: str
+    score: float
+    report: str
+    chapter: str
+    page: int
     source_url: str
 
 
@@ -79,6 +96,47 @@ def upload_filing(filing: Filing10K, s3=None) -> list[str]:
             Bucket=config.FILINGS_BUCKET,
             Key=key,
             Body=(header + section.text).encode(),
+            ContentType="text/plain; charset=utf-8",
+        )
+        s3.put_object(
+            Bucket=config.FILINGS_BUCKET,
+            Key=f"{key}.metadata.json",
+            Body=json.dumps(labels).encode(),
+            ContentType="application/json",
+        )
+        keys.append(key)
+    return keys
+
+
+def report_page_key(report: Report, page: ReportPage) -> str:
+    group = report.group.replace(" ", "_")
+    return f"regulatory/pillar3/{group}/{report.year}/page-{page.number:03}.txt"
+
+
+def upload_report_pages(report: Report, pages: list[ReportPage], s3=None) -> list[str]:
+    """Upload each report page plus its labels. Returns the S3 keys."""
+    s3 = s3 or _session().client("s3")
+    keys = []
+    for page in pages:
+        key = report_page_key(report, page)
+        # The header gives every chunk that starts a page its context; the labels carry it
+        # for all chunks.
+        header = f"{report.title} - {page.chapter} - page {page.number}\n\n"
+        labels = {
+            "metadataAttributes": {
+                "source_type": "pillar3",
+                "report_group": report.group,
+                "report_year": report.year,
+                "report": report.title,
+                "chapter": page.chapter,
+                "page": page.number,
+                "source_url": report.url,
+            }
+        }
+        s3.put_object(
+            Bucket=config.FILINGS_BUCKET,
+            Key=key,
+            Body=(header + page.text).encode(),
             ContentType="text/plain; charset=utf-8",
         )
         s3.put_object(
@@ -151,6 +209,42 @@ def search(
             )
         )
     return passages
+
+
+def search_reports(
+    query: str,
+    report_group: str | None = None,
+    year: int | None = None,
+    limit: int = 5,
+    runtime=None,
+) -> list[ReportPassage]:
+    """The `limit` chunks of the Pillar 3 reports closest in meaning to `query`, optionally
+    only from one report group ("MSEHSE Group", "MSI Group") and/or year."""
+    runtime = runtime or _session().client("bedrock-agent-runtime")
+    filters = [{"equals": {"key": "source_type", "value": "pillar3"}}]
+    if report_group:
+        filters.append({"equals": {"key": "report_group", "value": report_group}})
+    if year:
+        filters.append({"equals": {"key": "report_year", "value": year}})
+    label_filter = {"andAll": filters} if len(filters) > 1 else filters[0]
+    response = runtime.retrieve(
+        knowledgeBaseId=config.KB_ID,
+        retrievalQuery={"text": query},
+        retrievalConfiguration={
+            "vectorSearchConfiguration": {"numberOfResults": limit, "filter": label_filter}
+        },
+    )
+    return [
+        ReportPassage(
+            text=result["content"]["text"],
+            score=result.get("score", 0.0),
+            report=result.get("metadata", {}).get("report", ""),
+            chapter=result.get("metadata", {}).get("chapter", ""),
+            page=int(result.get("metadata", {}).get("page", 0)),
+            source_url=result.get("metadata", {}).get("source_url", ""),
+        )
+        for result in response["retrievalResults"]
+    ]
 
 
 def indexed_filings(s3=None) -> dict[str, list[str]]:
